@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V11.3.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * Copyright 2026 Arm Limited and/or its affiliates <open-source-office@arm.com>
  *
@@ -3687,13 +3687,8 @@ static BaseType_t prvCreateIdleTasks( void )
                 /* Assign idle task to each core before SMP scheduler is running. */
                 xIdleTaskHandles[ xCoreID ]->xTaskRunState = xCoreID;
                 pxCurrentTCBs[ xCoreID ] = xIdleTaskHandles[ xCoreID ];
-                #if ( ( configIDLE_AFFINITY == 1 ) && ( configUSE_CORE_AFFINITY == 1 ) )
-                {
-                    xIdleTaskHandles[ xCoreID ]->uxCoreAffinityMask = ( ( UBaseType_t ) 1U << ( UBaseType_t ) xCoreID );
-                }
-                #endif
             }
-            #endif /* if ( configNUMBER_OF_CORES == 1 ) */
+            #endif
         }
     }
 

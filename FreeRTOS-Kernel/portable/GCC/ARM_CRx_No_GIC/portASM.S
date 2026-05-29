@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V11.3.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
@@ -50,7 +50,7 @@
     .global vPortRestoreTaskContext
     .global vPortInitialiseFPSCR
     .global ulReadAPSR
-    .weak   vPortYield
+    .global vPortYield
     .global vPortEnableInterrupts
     .global vPortDisableInterrupts
     .global ulPortSetInterruptMaskFromISR

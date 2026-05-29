@@ -1,7 +1,8 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V11.3.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * Copyright 2024-2026 Arm Limited and/or its affiliates <open-source-office@arm.com>
+ * Copyright 2024-2025 Arm Limited and/or its affiliates
+ * <open-source-office@arm.com>
  *
  * SPDX-License-Identifier: MIT
  *
@@ -440,11 +441,7 @@ static void prvTaskExitError( void );
      *
      * @return CONTROL register value according to the configured PACBTI option.
      */
-    #if ( configNUMBER_OF_CORES == 1 )
-        static uint32_t prvConfigurePACBTI( BaseType_t xWriteControlRegister );
-    #else /* #if ( configNUMBER_OF_CORES == 1 ) */
-        uint32_t vConfigurePACBTI( BaseType_t xWriteControlRegister );
-    #endif /* #if ( configNUMBER_OF_CORES == 1 ) */
+    static uint32_t prvConfigurePACBTI( BaseType_t xWriteControlRegister );
 
 #endif /* configENABLE_PAC == 1 || configENABLE_BTI == 1 */
 
@@ -538,18 +535,6 @@ portDONT_DISCARD void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) PRIV
     BaseType_t xPortIsTaskPrivileged( void ) PRIVILEGED_FUNCTION;
 
 #endif /* configENABLE_MPU == 1 */
-
-#if ( configNUMBER_OF_CORES > 1 )
-
-    /**
-     * @brief Platform/Application-defined function that wakes up the secondary cores.
-     *
-     * @return pdTRUE if the secondary cores were successfully woken up.
-     *         pdFALSE otherwise.
-     */
-    extern BaseType_t configWAKE_SECONDARY_CORES( void );
-
-#endif /* #if ( configNUMBER_OF_CORES > 1 ) */
 /*-----------------------------------------------------------*/
 
 #if ( ( configENABLE_MPU == 1 ) && ( configUSE_MPU_WRAPPERS_V1 == 0 ) )
@@ -565,15 +550,7 @@ portDONT_DISCARD void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) PRIV
  * @brief Each task maintains its own interrupt status in the critical nesting
  * variable.
  */
-#if ( configNUMBER_OF_CORES == 1 )
-    PRIVILEGED_DATA static volatile uint32_t ulCriticalNesting = 0UL;
-#else /* #if ( configNUMBER_OF_CORES == 1 ) */
-    PRIVILEGED_DATA volatile uint32_t ulCriticalNestings[ configNUMBER_OF_CORES ] = { 0 };
-    /* Flags to check if the secondary cores are ready. */
-    PRIVILEGED_DATA volatile uint8_t ucSecondaryCoresReadyFlags[ configNUMBER_OF_CORES - 1 ] = { 0 };
-    /* Flag to indicate that the primary core has completed its initialisation. */
-    PRIVILEGED_DATA volatile uint8_t ucPrimaryCoreInitDoneFlag = 0;
- #endif /* #if ( configNUMBER_OF_CORES == 1 ) */
+PRIVILEGED_DATA static volatile uint32_t ulCriticalNesting = 0xaaaaaaaaUL;
 
 #if ( configENABLE_TRUSTZONE == 1 )
 
@@ -876,11 +853,7 @@ static void prvTaskExitError( void )
      * should instead call vTaskDelete( NULL ). Artificially force an assert()
      * to be triggered if configASSERT() is defined, then stop here so
      * application writers can catch the error. */
-    #if ( configNUMBER_OF_CORES == 1 )
-        configASSERT( ulCriticalNesting == ~0UL );
-    #else /* #if ( configNUMBER_OF_CORES == 1 ) */
-        configASSERT( ulCriticalNestings[ portGET_CORE_ID() ] == ~0UL );
-    #endif /* #if ( configNUMBER_OF_CORES == 1 ) */
+    configASSERT( ulCriticalNesting == ~0UL );
     portDISABLE_INTERRUPTS();
 
     while( ulDummy == 0 )
@@ -1044,29 +1017,28 @@ void vPortYield( void ) /* PRIVILEGED_FUNCTION */
 }
 /*-----------------------------------------------------------*/
 
-#if ( configNUMBER_OF_CORES == 1 )
-    void vPortEnterCritical( void ) /* PRIVILEGED_FUNCTION */
-    {
-        portDISABLE_INTERRUPTS();
-        ulCriticalNesting++;
-        /* Barriers are normally not required but do ensure the code is
-        * completely within the specified behaviour for the architecture. */
-        __asm volatile ( "dsb" ::: "memory" );
-        __asm volatile ( "isb" );
-    }
-    /*-----------------------------------------------------------*/
+void vPortEnterCritical( void ) /* PRIVILEGED_FUNCTION */
+{
+    portDISABLE_INTERRUPTS();
+    ulCriticalNesting++;
 
-    void vPortExitCritical( void ) /* PRIVILEGED_FUNCTION */
-    {
-        configASSERT( ulCriticalNesting );
-        ulCriticalNesting--;
+    /* Barriers are normally not required but do ensure the code is
+     * completely within the specified behaviour for the architecture. */
+    __asm volatile ( "dsb" ::: "memory" );
+    __asm volatile ( "isb" );
+}
+/*-----------------------------------------------------------*/
 
-        if( ulCriticalNesting == 0 )
-        {
-            portENABLE_INTERRUPTS();
-        }
+void vPortExitCritical( void ) /* PRIVILEGED_FUNCTION */
+{
+    configASSERT( ulCriticalNesting );
+    ulCriticalNesting--;
+
+    if( ulCriticalNesting == 0 )
+    {
+        portENABLE_INTERRUPTS();
     }
-#endif /* configNUMBER_OF_CORES == 1 */
+}
 /*-----------------------------------------------------------*/
 
 void SysTick_Handler( void ) /* PRIVILEGED_FUNCTION */
@@ -1074,10 +1046,6 @@ void SysTick_Handler( void ) /* PRIVILEGED_FUNCTION */
     uint32_t ulPreviousMask;
 
     ulPreviousMask = portSET_INTERRUPT_MASK_FROM_ISR();
-    #if ( configNUMBER_OF_CORES > 1 )
-        UBaseType_t uxSavedInterruptStatus = portENTER_CRITICAL_FROM_ISR();
-    #endif /* if ( configNUMBER_OF_CORES > 1 ) */
-
     traceISR_ENTER();
     {
         /* Increment the RTOS tick. */
@@ -1092,10 +1060,6 @@ void SysTick_Handler( void ) /* PRIVILEGED_FUNCTION */
             traceISR_EXIT();
         }
     }
-    #if ( configNUMBER_OF_CORES > 1 )
-        portEXIT_CRITICAL_FROM_ISR( uxSavedInterruptStatus );
-    #endif /* if ( configNUMBER_OF_CORES > 1 ) */
-
     portCLEAR_INTERRUPT_MASK_FROM_ISR( ulPreviousMask );
 }
 /*-----------------------------------------------------------*/
@@ -1584,11 +1548,7 @@ void vPortSVCHandler_C( uint32_t * pulCallerStackAddress ) /* PRIVILEGED_FUNCTIO
         {
             /* Check PACBTI security feature configuration before pushing the
              * CONTROL register's value on task's TCB. */
-            #if ( configNUMBER_OF_CORES == 1 )
-                ulControl = prvConfigurePACBTI( pdFALSE );
-            #else /* configNUMBER_OF_CORES > 1 */
-                ulControl = vConfigurePACBTI( pdFALSE );
-            #endif /* configNUMBER_OF_CORES */
+            ulControl = prvConfigurePACBTI( pdFALSE );
         }
         #endif /* configENABLE_PAC == 1 || configENABLE_BTI == 1 */
 
@@ -1777,17 +1737,91 @@ BaseType_t xPortStartScheduler( void ) /* PRIVILEGED_FUNCTION */
     }
     #endif /* configCHECK_HANDLER_INSTALLATION */
 
-    vPortConfigureInterruptPriorities();
+    #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) )
+    {
+        volatile uint32_t ulImplementedPrioBits = 0;
+        volatile uint8_t ucMaxPriorityValue;
+
+        /* Determine the maximum priority from which ISR safe FreeRTOS API
+         * functions can be called. ISR safe functions are those that end in
+         * "FromISR". FreeRTOS maintains separate thread and ISR API functions to
+         * ensure interrupt entry is as fast and simple as possible.
+         *
+         * First, determine the number of priority bits available. Write to all
+         * possible bits in the priority setting for SVCall. */
+        portNVIC_SHPR2_REG = 0xFF000000;
+
+        /* Read the value back to see how many bits stuck. */
+        ucMaxPriorityValue = ( uint8_t ) ( ( portNVIC_SHPR2_REG & 0xFF000000 ) >> 24 );
+
+        /* Use the same mask on the maximum system call priority. */
+        ucMaxSysCallPriority = configMAX_SYSCALL_INTERRUPT_PRIORITY & ucMaxPriorityValue;
+
+        /* Check that the maximum system call priority is nonzero after
+         * accounting for the number of priority bits supported by the
+         * hardware. A priority of 0 is invalid because setting the BASEPRI
+         * register to 0 unmasks all interrupts, and interrupts with priority 0
+         * cannot be masked using BASEPRI.
+         * See https://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html */
+        configASSERT( ucMaxSysCallPriority );
+
+        /* Check that the bits not implemented in hardware are zero in
+         * configMAX_SYSCALL_INTERRUPT_PRIORITY. */
+        configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & ( uint8_t ) ( ~( uint32_t ) ucMaxPriorityValue ) ) == 0U );
+
+        /* Calculate the maximum acceptable priority group value for the number
+         * of bits read back. */
+        while( ( ucMaxPriorityValue & portTOP_BIT_OF_BYTE ) == portTOP_BIT_OF_BYTE )
+        {
+            ulImplementedPrioBits++;
+            ucMaxPriorityValue <<= ( uint8_t ) 0x01;
+        }
+
+        if( ulImplementedPrioBits == 8 )
+        {
+            /* When the hardware implements 8 priority bits, there is no way for
+             * the software to configure PRIGROUP to not have sub-priorities. As
+             * a result, the least significant bit is always used for sub-priority
+             * and there are 128 preemption priorities and 2 sub-priorities.
+             *
+             * This may cause some confusion in some cases - for example, if
+             * configMAX_SYSCALL_INTERRUPT_PRIORITY is set to 5, both 5 and 4
+             * priority interrupts will be masked in Critical Sections as those
+             * are at the same preemption priority. This may appear confusing as
+             * 4 is higher (numerically lower) priority than
+             * configMAX_SYSCALL_INTERRUPT_PRIORITY and therefore, should not
+             * have been masked. Instead, if we set configMAX_SYSCALL_INTERRUPT_PRIORITY
+             * to 4, this confusion does not happen and the behaviour remains the same.
+             *
+             * The following assert ensures that the sub-priority bit in the
+             * configMAX_SYSCALL_INTERRUPT_PRIORITY is clear to avoid the above mentioned
+             * confusion. */
+            configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & 0x1U ) == 0U );
+            ulMaxPRIGROUPValue = 0;
+        }
+        else
+        {
+            ulMaxPRIGROUPValue = portMAX_PRIGROUP_BITS - ulImplementedPrioBits;
+        }
+
+        /* Shift the priority group value back to its position within the AIRCR
+         * register. */
+        ulMaxPRIGROUPValue <<= portPRIGROUP_SHIFT;
+        ulMaxPRIGROUPValue &= portPRIORITY_GROUP_MASK;
+    }
+    #endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
+
+    /* Make PendSV and SysTick the lowest priority interrupts, and make SVCall
+     * the highest priority. */
+    portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
+    portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
+    portNVIC_SHPR2_REG = 0;
 
     #if ( ( configENABLE_PAC == 1 ) || ( configENABLE_BTI == 1 ) )
     {
         /* Set the CONTROL register value based on PACBTI security feature
          * configuration before starting the first task. */
-        #if ( configNUMBER_OF_CORES == 1 )
-            ( void ) prvConfigurePACBTI( pdTRUE );
-        #else /* configNUMBER_OF_CORES > 1 */
-            ( void ) vConfigurePACBTI( pdTRUE );
-        #endif /* configNUMBER_OF_CORES */
+        ( void ) prvConfigurePACBTI( pdTRUE );
     }
     #endif /* configENABLE_PAC == 1 || configENABLE_BTI == 1 */
 
@@ -1798,47 +1832,12 @@ BaseType_t xPortStartScheduler( void ) /* PRIVILEGED_FUNCTION */
     }
     #endif /* configENABLE_MPU */
 
-    #if ( configNUMBER_OF_CORES > 1 )
-        /* Start the timer that generates the tick ISR. Interrupts are disabled
-         * here already. */
-        vPortSetupTimerInterrupt();
-        /* Initialize the critical nesting count for all cores. */
-        for ( uint8_t ucCoreID = 0; ucCoreID < configNUMBER_OF_CORES; ucCoreID++ )
-        {
-            ulCriticalNestings[ ucCoreID ] = 0;
-        }
-        /* Signal that primary core has done all the necessary initialisations. */
-        ucPrimaryCoreInitDoneFlag = 1;
-        /* Wake up secondary cores */
-        BaseType_t xWakeResult = configWAKE_SECONDARY_CORES();
-        configASSERT( xWakeResult == pdTRUE );
+    /* Start the timer that generates the tick ISR. Interrupts are disabled
+     * here already. */
+    vPortSetupTimerInterrupt();
 
-        /* Hold the primary core here until all the secondary cores are ready, this would be achieved only when
-         * all elements of ucSecondaryCoresReadyFlags are set.
-         */
-        while( 1 )
-        {
-            BaseType_t xAllCoresReady = pdTRUE;
-            for( uint8_t ucCoreID = 0; ucCoreID < ( configNUMBER_OF_CORES - 1 ); ucCoreID++ )
-            {
-                if( ucSecondaryCoresReadyFlags[ ucCoreID ] != pdTRUE )
-                {
-                    xAllCoresReady = pdFALSE;
-                    break;
-                }
-                }
-
-            if ( xAllCoresReady == pdTRUE )
-            {
-                break;
-            }
-        }
-    #else /* if ( configNUMBER_OF_CORES > 1 ) */
-        /* Start the timer that generates the tick ISR. */
-        vPortSetupTimerInterrupt();
-        /* Initialize the critical nesting count ready for the first task. */
-        ulCriticalNesting = 0;
-    #endif /* if ( configNUMBER_OF_CORES > 1 ) */
+    /* Initialize the critical nesting count ready for the first task. */
+    ulCriticalNesting = 0;
 
     #if ( ( configENABLE_MPU == 1 ) && ( configUSE_MPU_WRAPPERS_V1 == 0 ) )
     {
@@ -1855,11 +1854,7 @@ BaseType_t xPortStartScheduler( void ) /* PRIVILEGED_FUNCTION */
      * functionality by defining configTASK_RETURN_ADDRESS. Call
      * vTaskSwitchContext() so link time optimization does not remove the
      * symbol. */
-    #if ( configNUMBER_OF_CORES > 1 )
-        vTaskSwitchContext( portGET_CORE_ID() );
-    #else
-        vTaskSwitchContext();
-    #endif
+    vTaskSwitchContext();
     prvTaskExitError();
 
     /* Should not get here. */
@@ -1871,11 +1866,7 @@ void vPortEndScheduler( void ) /* PRIVILEGED_FUNCTION */
 {
     /* Not implemented in ports where there is nothing to return to.
      * Artificially force an assert. */
-    #if ( configNUMBER_OF_CORES == 1 )
-        configASSERT( ulCriticalNesting == 1000UL );
-    #else /* if ( configNUMBER_OF_CORES == 1 ) */
-        configASSERT( ulCriticalNestings[ portGET_CORE_ID() ] == 1000UL );
-    #endif /* if ( configNUMBER_OF_CORES == 1 ) */
+    configASSERT( ulCriticalNesting == 1000UL );
 }
 /*-----------------------------------------------------------*/
 
@@ -2158,90 +2149,6 @@ BaseType_t xPortIsInsideInterrupt( void )
 #endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
 /*-----------------------------------------------------------*/
 
-void vPortConfigureInterruptPriorities( void ) /* PRIVILEGED_FUNCTION */
-{
-    #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) )
-    {
-        volatile uint32_t ulImplementedPrioBits = 0;
-        volatile uint8_t ucMaxPriorityValue;
-
-        /* Determine the maximum priority from which ISR safe FreeRTOS API
-        * functions can be called. ISR safe functions are those that end in
-        * "FromISR". FreeRTOS maintains separate thread and ISR API functions to
-        * ensure interrupt entry is as fast and simple as possible.
-        *
-        * First, determine the number of priority bits available. Write to all
-        * possible bits in the priority setting for SVCall. */
-        portNVIC_SHPR2_REG = 0xFF000000;
-
-        /* Read the value back to see how many bits stuck. */
-        ucMaxPriorityValue = ( uint8_t ) ( ( portNVIC_SHPR2_REG & 0xFF000000 ) >> 24 );
-
-        /* Use the same mask on the maximum system call priority. */
-        ucMaxSysCallPriority = configMAX_SYSCALL_INTERRUPT_PRIORITY & ucMaxPriorityValue;
-
-        /* Check that the maximum system call priority is nonzero after
-        * accounting for the number of priority bits supported by the
-        * hardware. A priority of 0 is invalid because setting the BASEPRI
-        * register to 0 unmasks all interrupts, and interrupts with priority 0
-        * cannot be masked using BASEPRI.
-        * See https://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html */
-        configASSERT( ucMaxSysCallPriority );
-
-        /* Check that the bits not implemented in hardware are zero in
-        * configMAX_SYSCALL_INTERRUPT_PRIORITY. */
-        configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & ( uint8_t ) ( ~( uint32_t ) ucMaxPriorityValue ) ) == 0U );
-
-        /* Calculate the maximum acceptable priority group value for the number
-        * of bits read back. */
-        while( ( ucMaxPriorityValue & portTOP_BIT_OF_BYTE ) == portTOP_BIT_OF_BYTE )
-        {
-            ulImplementedPrioBits++;
-            ucMaxPriorityValue <<= ( uint8_t ) 0x01;
-        }
-
-        if( ulImplementedPrioBits == 8 )
-        {
-            /* When the hardware implements 8 priority bits, there is no way for
-            * the software to configure PRIGROUP to not have sub-priorities. As
-            * a result, the least significant bit is always used for sub-priority
-            * and there are 128 preemption priorities and 2 sub-priorities.
-            *
-            * This may cause some confusion in some cases - for example, if
-            * configMAX_SYSCALL_INTERRUPT_PRIORITY is set to 5, both 5 and 4
-            * priority interrupts will be masked in Critical Sections as those
-            * are at the same preemption priority. This may appear confusing as
-            * 4 is higher (numerically lower) priority than
-            * configMAX_SYSCALL_INTERRUPT_PRIORITY and therefore, should not
-            * have been masked. Instead, if we set configMAX_SYSCALL_INTERRUPT_PRIORITY
-            * to 4, this confusion does not happen and the behaviour remains the same.
-            *
-            * The following assert ensures that the sub-priority bit in the
-            * configMAX_SYSCALL_INTERRUPT_PRIORITY is clear to avoid the above mentioned
-            * confusion. */
-            configASSERT( ( configMAX_SYSCALL_INTERRUPT_PRIORITY & 0x1U ) == 0U );
-            ulMaxPRIGROUPValue = 0;
-        }
-        else
-        {
-            ulMaxPRIGROUPValue = portMAX_PRIGROUP_BITS - ulImplementedPrioBits;
-        }
-
-        /* Shift the priority group value back to its position within the AIRCR
-        * register. */
-        ulMaxPRIGROUPValue <<= portPRIGROUP_SHIFT;
-        ulMaxPRIGROUPValue &= portPRIORITY_GROUP_MASK;
-    }
-    #endif /* #if ( ( configASSERT_DEFINED == 1 ) && ( portHAS_ARMV8M_MAIN_EXTENSION == 1 ) ) */
-
-    /* Make PendSV and SysTick the lowest priority interrupts, and make SVCall
-    * the highest priority. */
-    portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
-    portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
-    portNVIC_SHPR2_REG = 0;
-}
-/*-----------------------------------------------------------*/
-
 #if ( ( configENABLE_MPU == 1 ) && ( configUSE_MPU_WRAPPERS_V1 == 0 ) && ( configENABLE_ACCESS_CONTROL_LIST == 1 ) )
 
     void vPortGrantAccessToKernelObject( TaskHandle_t xInternalTaskHandle,
@@ -2338,214 +2245,36 @@ void vPortConfigureInterruptPriorities( void ) /* PRIVILEGED_FUNCTION */
 /*-----------------------------------------------------------*/
 
 #if ( ( configENABLE_PAC == 1 ) || ( configENABLE_BTI == 1 ) )
-    #if ( configNUMBER_OF_CORES == 1 )
-        static uint32_t prvConfigurePACBTI( BaseType_t xWriteControlRegister )
-    #else /* configNUMBER_OF_CORES > 1 */
-        uint32_t vConfigurePACBTI( BaseType_t xWriteControlRegister )
-    #endif /* configNUMBER_OF_CORES */
+
+    static uint32_t prvConfigurePACBTI( BaseType_t xWriteControlRegister )
+    {
+        uint32_t ulControl = 0x0;
+
+        /* Ensure that PACBTI is implemented. */
+        configASSERT( portID_ISAR5_REG != 0x0 );
+
+        /* Enable UsageFault exception. */
+        portSCB_SYS_HANDLER_CTRL_STATE_REG |= portSCB_USG_FAULT_ENABLE_BIT;
+
+        #if ( configENABLE_PAC == 1 )
         {
-            uint32_t ulControl = 0x0;
-
-            /* Ensure that PACBTI is implemented. */
-            configASSERT( portID_ISAR5_REG != 0x0 );
-
-            /* Enable UsageFault exception. */
-            portSCB_SYS_HANDLER_CTRL_STATE_REG |= portSCB_USG_FAULT_ENABLE_BIT;
-
-            #if ( configENABLE_PAC == 1 )
-            {
-                ulControl |= ( portCONTROL_UPAC_EN | portCONTROL_PAC_EN );
-            }
-            #endif
-
-            #if ( configENABLE_BTI == 1 )
-            {
-                ulControl |= ( portCONTROL_UBTI_EN | portCONTROL_BTI_EN );
-            }
-            #endif
-
-            if( xWriteControlRegister == pdTRUE )
-            {
-                __asm volatile ( "msr control, %0" : : "r" ( ulControl ) );
-            }
-
-            return ulControl;
+            ulControl |= ( portCONTROL_UPAC_EN | portCONTROL_PAC_EN );
         }
+        #endif
+
+        #if ( configENABLE_BTI == 1 )
+        {
+            ulControl |= ( portCONTROL_UBTI_EN | portCONTROL_BTI_EN );
+        }
+        #endif
+
+        if( xWriteControlRegister == pdTRUE )
+        {
+            __asm volatile ( "msr control, %0" : : "r" ( ulControl ) );
+        }
+
+        return ulControl;
+    }
 
 #endif /* configENABLE_PAC == 1 || configENABLE_BTI == 1 */
 /*-----------------------------------------------------------*/
-
-#if ( configNUMBER_OF_CORES > 1 )
-
-    /* Which core owns the lock? */
-    PRIVILEGED_DATA volatile uint32_t ulOwnedByCore[ portMAX_CORE_COUNT ];
-    /* Lock count a core owns. */
-    PRIVILEGED_DATA volatile uint32_t ulRecursionCountByLock[ eLockCount ];
-    /* Index 0 is used for ISR lock and Index 1 is used for task lock. */
-    PRIVILEGED_DATA volatile uint32_t ulGateWord[ eLockCount ];
-
-    __attribute__((weak)) void vInterruptCore( uint8_t ucCoreID )
-    {
-        /* Default weak stub - platform specific implementation may override. */
-        ( void ) ucCoreID;
-    }
-
-/*-----------------------------------------------------------*/
-
-    static inline void prvSpinUnlock( volatile uint32_t * ulLock )
-    {
-        /* Conservative unlock: preserve original barriers for broad HW/FVP. */
-        __asm volatile (
-            "dmb sy         \n"
-            "mov r1, #0     \n"
-            "str r1, [%0]   \n"
-            "sev            \n"
-            "dsb            \n"
-            "isb            \n"
-            :
-            : "r" ( ulLock )
-            : "memory", "r1"
-        );
-    }
-
-/*-----------------------------------------------------------*/
-
-    static inline uint32_t prvSpinTrylock( volatile uint32_t * ulLock )
-    {
-        /*
-         * Conservative ldrex/strex trylock:
-         * - Return 1 immediately if busy, clearing exclusive state (CLREX).
-         * - Retry strex only on spurious failure when observed free.
-         * - DMB on success to preserve expected acquire semantics.
-         */
-        uint32_t ulVal;
-        uint32_t ulStatus;
-
-        __asm volatile (
-            " ldrex %0, [%1]   \n"
-            : "=r" ( ulVal )
-            : "r" ( ulLock )
-            : "memory"
-        );
-
-        if( ulVal != 0U )
-        {
-            __asm volatile ("clrex" ::: "memory");
-            return 1U;
-        }
-
-        __asm volatile (
-            " strex %0, %2, [%1]   \n"
-            : "=&r" ( ulStatus )
-            : "r" ( ulLock ), "r" (1U)
-            : "memory"
-        );
-
-        if( ulStatus != 0U )
-        {
-            return 1U;
-        }
-        __asm volatile ( "dmb" ::: "memory" );
-        return 0U;
-    }
-
-
-/*-----------------------------------------------------------*/
-
-    /* Read 32b value shared between cores. */
-    static inline uint32_t prvGet32( volatile uint32_t * x )
-    {
-        __asm( "dsb" );
-        return *x;
-    }
-
-/*-----------------------------------------------------------*/
-
-    /* Write 32b value shared between cores. */
-    static inline void prvSet32( volatile uint32_t * x,
-                                 uint32_t value )
-    {
-        *x = value;
-        __asm( "dsb" );
-    }
-
-/*-----------------------------------------------------------*/
-
-    void vPortRecursiveLock( uint8_t ucCoreID,
-                             ePortRTOSLock eLockNum,
-                             BaseType_t uxAcquire )
-    {
-        /* Validate the core ID and lock number. */
-        configASSERT( ucCoreID < portMAX_CORE_COUNT );
-        configASSERT( eLockNum < eLockCount );
-
-        uint32_t ulLockBit = 1u << eLockNum;
-
-        /* Lock acquire */
-        if( uxAcquire )
-        {
-            /* Check if spinlock is available. */
-            /* If spinlock is not available check if the core owns the lock. */
-            /* If the core owns the lock wait increment the lock count by the core. */
-            /* If core does not own the lock wait for the spinlock. */
-            if( prvSpinTrylock( &ulGateWord[ eLockNum ] ) != 0 )
-            {
-                /* Check if the core owns the spinlock. */
-                if( prvGet32( &ulOwnedByCore[ ucCoreID ] ) & ulLockBit )
-                {
-                    configASSERT( prvGet32( &ulRecursionCountByLock[ eLockNum ] ) != portUINT32_MAX );
-                    prvSet32( &ulRecursionCountByLock[ eLockNum ], ( prvGet32( &ulRecursionCountByLock[ eLockNum ] ) + 1 ) );
-                    return;
-                }
-
-                /* Preload the gate word into the cache. */
-                uint32_t dummy = ulGateWord[ eLockNum ];
-                dummy++;
-
-                while( prvSpinTrylock( &ulGateWord[ eLockNum ] ) != 0 )
-                {
-                    __asm volatile ( "wfe" );
-                }
-            }
-
-            /* Add barrier to ensure lock is taken before we proceed. */
-            __asm volatile( "dmb sy" ::: "memory" );
-
-            /* Assert the lock count is 0 when the spinlock is free and is acquired. */
-            configASSERT( prvGet32( &ulRecursionCountByLock[ eLockNum ] ) == 0 );
-
-            /* Set lock count as 1. */
-            prvSet32( &ulRecursionCountByLock[ eLockNum ], 1 );
-            /* Set ulOwnedByCore. */
-            prvSet32( &ulOwnedByCore[ ucCoreID ], ( prvGet32( &ulOwnedByCore[ ucCoreID ] ) | ulLockBit ) );
-        }
-        /* Lock release. */
-        else
-        {
-            /* Assert the lock is not free already. */
-            configASSERT( ( prvGet32( &ulOwnedByCore[ ucCoreID ] ) & ulLockBit ) != 0 );
-            configASSERT( prvGet32( &ulRecursionCountByLock[ eLockNum ] ) != 0 );
-
-            /* Reduce ulRecursionCountByLock by 1. */
-            prvSet32( &ulRecursionCountByLock[ eLockNum ], ( prvGet32( &ulRecursionCountByLock[ eLockNum ] ) - 1 ) );
-
-            if( !prvGet32( &ulRecursionCountByLock[ eLockNum ] ) )
-            {
-                prvSet32( &ulOwnedByCore[ ucCoreID ], ( prvGet32( &ulOwnedByCore[ ucCoreID ] ) & ~ulLockBit ) );
-                prvSpinUnlock( &ulGateWord[ eLockNum ] );
-                /* Add barrier to ensure lock status is reflected before we proceed. */
-                __asm volatile( "dmb sy" ::: "memory" );
-            }
-        }
-    }
-
-/*-----------------------------------------------------------*/
-
-    uint8_t ucPortGetCoreID( void )
-    {
-        return *(volatile uint8_t *)(configCORE_ID_REGISTER);
-    }
-
-/*-----------------------------------------------------------*/
-
-#endif /* if( configNUMBER_OF_CORES > 1 ) */

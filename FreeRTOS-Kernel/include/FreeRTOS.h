@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V11.3.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
@@ -375,10 +375,6 @@
 
 #ifndef configIDLE_SHOULD_YIELD
     #define configIDLE_SHOULD_YIELD    1
-#endif
-
-#ifndef configIDLE_AFFINITY
-    #define configIDLE_AFFINITY    0
 #endif
 
 #if configMAX_TASK_NAME_LEN < 1

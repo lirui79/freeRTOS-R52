@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V11.3.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
@@ -560,14 +560,14 @@ typedef StreamBufferHandle_t MessageBufferHandle_t;
  *
  * Example use:
  * @code{c}
- * void vAFunction( MessageBufferHandle_t xMessageBuffer )
+ * void vAFunction( MessageBuffer_t xMessageBuffer )
  * {
  * uint8_t ucRxData[ 20 ];
  * size_t xReceivedBytes;
  * const TickType_t xBlockTime = pdMS_TO_TICKS( 20 );
  *
  *  // Receive the next message from the message buffer.  Wait in the Blocked
- *  // state (so not using any CPU processing time) for a maximum of 20ms for
+ *  // state (so not using any CPU processing time) for a maximum of 100ms for
  *  // a message to become available.
  *  xReceivedBytes = xMessageBufferReceive( xMessageBuffer,
  *                                          ( void * ) ucRxData,
@@ -655,7 +655,7 @@ typedef StreamBufferHandle_t MessageBufferHandle_t;
  * Example use:
  * @code{c}
  * // A message buffer that has already been created.
- * MessageBufferHandle_t xMessageBuffer;
+ * MessageBuffer_t xMessageBuffer;
  *
  * void vAnInterruptServiceRoutine( void )
  * {

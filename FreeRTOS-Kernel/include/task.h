@@ -1,5 +1,5 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
+ * FreeRTOS Kernel V11.3.0
  * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * Copyright 2025 Arm Limited and/or its affiliates <open-source-office@arm.com>
  *
@@ -54,9 +54,9 @@
  * The tskKERNEL_VERSION_MAJOR, tskKERNEL_VERSION_MINOR, tskKERNEL_VERSION_BUILD
  * values will reflect the last released version number.
  */
-#define tskKERNEL_VERSION_NUMBER                      "V11.1.0+"
+#define tskKERNEL_VERSION_NUMBER                      "V11.3.0"
 #define tskKERNEL_VERSION_MAJOR                       11
-#define tskKERNEL_VERSION_MINOR                       1
+#define tskKERNEL_VERSION_MINOR                       3
 #define tskKERNEL_VERSION_BUILD                       0
 
 /* MPU region parameters passed in ulParameters
