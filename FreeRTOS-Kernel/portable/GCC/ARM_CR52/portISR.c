@@ -92,7 +92,7 @@
 	  than each line having its own asm block.
 */
 
-#include "gic.h"
+//#include "gic.h"
 
 /* Scheduler includes. */
 #include "FreeRTOS.h"
@@ -248,9 +248,10 @@ void vPortSwitchContext( void )
 }
 
 uint32_t vPortIRQHandler( void )
-{
-  int irq_id = gic_get_irq();
-  gic_ack_irq(irq_id);
+{//  int irq_id = gic_get_irq();
+  int irq_id = 0;
+  asm volatile("mrc p15, 0, %0, c12, c12, 0" : "=r"(irq_id));
+  asm volatile("mcr p15, 0, %0, c12, c12, 1" : : "r"(irq_id));//gic_ack_irq(irq_id);
   if (irq_id == 27) {
 	int32_t freq;
 	asm volatile("mrc p15, 0, %0, c14, c0, 0" : "=r"(freq));
