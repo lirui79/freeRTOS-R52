@@ -25,7 +25,7 @@ if(NOT TARGET freertos_config )
             "    INTERFACE\n"
             "      include) # The config file directory\n"
             "  target_compile_definitions(freertos_config\n"
-            "    PUBLIC\n"
+            "    INTERFACE\n"
             "    projCOVERAGE_TEST=0)\n")
     else()
         message(WARNING " Using deprecated 'FREERTOS_CONFIG_FILE_DIRECTORY' - please update your project CMakeLists.txt file:\n"
@@ -34,7 +34,7 @@ if(NOT TARGET freertos_config )
             "    INTERFACE\n"
             "      include) # The config file directory\n"
             "  target_compile_definitions(freertos_config\n"
-            "    PUBLIC\n"
+            "    INTERFACE\n"
             "    projCOVERAGE_TEST=0)\n")
     endif()
 endif()
@@ -93,6 +93,7 @@ if(NOT FREERTOS_PORT)
         " GCC_ARM_STAR_MC3_NTZ_NONSECURE   - Compiler: GCC           Target: Arm China STAR-MC3 non-trustzone non-secure\n"
         " GCC_ARM_STAR_MC3_TFM             - Compiler: GCC           Target: Arm China STAR-MC3 non-secure for TF-M\n"
         " GCC_ARM_CR5                      - Compiler: GCC           Target: ARM Cortex-R5\n"
+        " GCC_ARM_CR52                     - Compiler: GCC           Target: ARM Cortex-R52\n"
         " GCC_ARM_CRX_MPU                  - Compiler: GCC           Target: ARM Cortex-Rx with MPU\n"
         " GCC_ARM_CRX_NOGIC                - Compiler: GCC           Target: ARM Cortex-Rx no GIC\n"
         " GCC_ARM_CR82                     - Compiler: GCC           Target: ARM Cortex-R82\n"
