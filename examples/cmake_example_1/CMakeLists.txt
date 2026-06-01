@@ -32,23 +32,15 @@ set(FREERTOS_KERNEL_PATH ${FREERTOS_ROOT_PATH}/FreeRTOS-Kernel)
 #set(LINKER_SCRIPT ${FREERTOS_ROOT_PATH}/link.ld)
 set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/link.ld)
 
-if(NOT EXISTS ${LINKER_SCRIPT})
-    message(FATAL_ERROR "Linker script not found at: ${LINKER_SCRIPT}")
-endif()
+
 
 # Add the freertos_config for FreeRTOS-Kernel
 add_library(freertos_config INTERFACE)
 
-#add_library(freertos_boot STATIC)
-
-#target_sources(freertos_boot PRIVATE
-#    ${FREERTOS_BOOT_PATH}/start.S
-#)
-
-
 target_include_directories(freertos_config
     INTERFACE
-    "../configuration"
+    "./"
+#    "../configuration"
     ${FREERTOS_ROOT_PATH}/include
 )
 
@@ -62,7 +54,7 @@ if (DEFINED FREERTOS_SMP_EXAMPLE AND FREERTOS_SMP_EXAMPLE STREQUAL "1")
     # Adding the following configurations to build SMP template port
     add_compile_options( -DconfigNUMBER_OF_CORES=2 -DconfigUSE_PASSIVE_IDLE_HOOK=0 )
 endif()
-# 2. 内核架构编译参数（完全对齐你当前编译指令）
+
 
 # 针对 ARM Cortex-R52 (示例，具体取决于你的芯片变体)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -v -Og -g -std=gnu99 -mcpu=cortex-r52 -mfloat-abi=hard -mlibarch=armv8-r+crc -march=armv8-r+crc -mfpu=fpv5-d16")
@@ -75,7 +67,6 @@ set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -mcpu=cortex-r52 -mfloat-abi=hard -mfpu=
 
 
 
-# -T${CMAKE_SOURCE_DIR}/link.ld
 
 # Select the heap port.  values between 1-4 will pick a heap.
 set(FREERTOS_HEAP "4" CACHE STRING "" FORCE)
@@ -128,7 +119,7 @@ target_compile_options(freertos_kernel PRIVATE
     $<$<COMPILE_LANG_AND_ID:C,Clang>:-Wno-covered-switch-default>
     $<$<COMPILE_LANG_AND_ID:C,Clang>:-Wno-cast-align> )
 
-#target_link_options(${PROJECT_NAME}.elf PRIVATE -T${LINKER_SCRIPT})
+
 
 add_executable(${PROJECT_NAME}.elf
 #    ${FREERTOS_BOOT_PATH}/start.s
@@ -168,9 +159,8 @@ target_link_libraries(${PROJECT_NAME}.elf
         freertos_driver
         freertos_config
 )
-#target_link_libraries(${PROJECT_NAME}.elf freertos_kernel freertos_config)
 
-#set_property(TARGET freertos_kernel PROPERTY C_STANDARD 90)
+
 
 # 7. 输出二进制/hex文件
 add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD

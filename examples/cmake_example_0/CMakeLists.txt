@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(example)
 
+enable_language(CXX C ASM)
+
 set(FREERTOS_KERNEL_PATH "../../FreeRTOS-Kernel")
 
 # Add the freertos_config for FreeRTOS-Kernel

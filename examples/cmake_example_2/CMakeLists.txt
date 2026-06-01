@@ -3,32 +3,33 @@ project(example)
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
+enable_language(CXX C ASM)
 
 # Windows
 set(TOOLCHAINPATH "C:/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin")
 # Linux
 #set(TOOLCHAINPATH "/home/stone_li/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin")
 
-# ÄãµÄ ARM ±àÒëÆ÷Â·¾¶£¨ºÍÄãÃüÁîÀïÒ»ÖÂ£©
+####################
 set(CMAKE_C_COMPILER ${TOOLCHAINPATH}/arm-none-eabi-gcc)
 set(CMAKE_CXX_COMPILER ${TOOLCHAINPATH}/arm-none-eabi-g++)
 set(CMAKE_ASM_COMPILER ${TOOLCHAINPATH}/arm-none-eabi-as)
 
-# ±àÒëÆ÷¹¤¾ß
+################
 set(CMAKE_OBJCOPY ${TOOLCHAINPATH}/arm-none-eabi-objcopy)
 set(CMAKE_OBJDUMP ${TOOLCHAINPATH}/arm-none-eabi-objdump)
 set(CMAKE_SIZE ${TOOLCHAINPATH}/arm-none-eabi-size)
 set(CMAKE_AR ${TOOLCHAINPATH}/arm-none-eabi-ar)
 set(CMAKE_RANLIB ${TOOLCHAINPATH}/arm-none-eabi-ranlib)
 
+set(FREERTOS_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../..)
+set(FREERTOS_BOOT_PATH ${FREERTOS_ROOT_PATH}/boot)
+set(FREERTOS_UTILS_PATH ${FREERTOS_ROOT_PATH}/utils)
+set(FREERTOS_DRIVER_PATH ${FREERTOS_ROOT_PATH}/driver)
+set(FREERTOS_KERNEL_PATH ${FREERTOS_ROOT_PATH}/FreeRTOS-Kernel)
+set(LINKER_SCRIPT ${FREERTOS_ROOT_PATH}/link.ld)
+#set(LINKER_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/link.ld)
 
-# ÉèÖÃÄ¿±ê»·¾³Â·¾¶£¨¿âºÍÍ·ÎÄ¼þ£©
-#set(CMAKE_FIND_ROOT_PATH /path/to/sysroot)
-set(FREERTOS_KERNEL_PATH "../../")
-# ÅäÖÃ²éÕÒÄ£Ê½
-#set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
-#set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
-#set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 
 
 # Add the freertos_config for FreeRTOS-Kernel
@@ -37,6 +38,7 @@ add_library(freertos_config INTERFACE)
 target_include_directories(freertos_config
     INTERFACE
     "../configuration"
+    ${FREERTOS_ROOT_PATH}/include
 )
 
 #target_include_directories(freertos_config
@@ -50,59 +52,16 @@ if (DEFINED FREERTOS_SMP_EXAMPLE AND FREERTOS_SMP_EXAMPLE STREQUAL "1")
     add_compile_options( -DconfigNUMBER_OF_CORES=2 -DconfigUSE_PASSIVE_IDLE_HOOK=0 )
 endif()
 
-# 2. ÄÚºË¼Ü¹¹±àÒë²ÎÊý£¨ÍêÈ«¶ÔÆëÄãµ±Ç°±àÒëÖ¸Áî£©
-set(CPU_FLAGS
-    -mcpu=cortex-r52
-    -mfpu=vfpv3-d16
-    -marm
-    -mno-thumb-interwork
-    -mabi=aapcs-linux
-    -mno-unaligned-access
-    -mfloat-abi=soft
-    -mlibarch=armv8-r+crc
-    -march=armv8-r+crc
-)
 
-# 3. Í¨ÓÃ±àÒëÑ¡Ïî
-add_compile_options(
-    ${CPU_FLAGS}
-    -v
-    -Og
-    -g
-    -std=gnu99
-    -fno-builtin-printf
-    -fomit-frame-pointer
-    -fno-strict-aliasing
-    -fno-builtin-memcpy
-    -Wall
-    -Wextra
-    # È«¾ÖÇ¿ÖÆ32Î»Ã¶¾Ù£¬³¹µ×Ïû³ýÁ´½ÓÃ¶¾Ù¾¯¸æ
-    -fno-short-enums
-    -nostdlib
-)
+#### ARM Cortex-R52
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -v -Og -g -std=gnu99 -mcpu=cortex-r52 -mfloat-abi=hard -mlibarch=armv8-r+crc -march=armv8-r+crc -mfpu=fpv5-d16")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-builtin-printf -fomit-frame-pointer -fno-strict-aliasing -fno-builtin-memcpy -Wall -Wextra -fno-short-enums -nostdlib -D__FREERTOS__")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static ")
+#--no-warn-rwx-segments
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=cortex-r52 -mfloat-abi=hard -mfpu=fpv5-sp-d16")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=cortex-r52 -mfloat-abi=hard -mfpu=fpv5-sp-d16")
+set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -mcpu=cortex-r52 -mfloat-abi=hard -mfpu=fpv5-sp-d16")
 
-# 4. Á´½ÓÈ«¾ÖÅäÖÃ
-add_link_options(
-    ${CPU_FLAGS}
-    -fno-short-enums
-    # Âã»úÎÞÏµÍ³£¬²¹ÆëÏµÍ³µ÷ÓÃ×®£¬½â¾ö_exit/_sbrk/_writeµÈÎ´¶¨Òå
-    --specs=nosys.specs
-    # ¿É×ÔÐÐÌí¼ÓÁ´½Ó½Å±¾
-     -nostdlib -T${CMAKE_SOURCE_DIR}/link.ld
-)
-
-
-#add_compile_options( -v -Og -g -std=gnu99 -mcpu=cortex-r52 -mfpu=vfpv3-d16 )
-#add_compile_options( -marm -mno-thumb-interwork -mabi=aapcs-linux -mno-unaligned-access )
-#add_compile_options( -fno-builtin-printf -fomit-frame-pointer -fno-strict-aliasing -fno-builtin-memcpy )
-#add_compile_options( -Wall -Wextra -fno-short-enums )
-# ========== Ò»¼ü½â¾öÄãËùÓÐ´íÎó ==========
-# 1. Ç¿ÖÆ 32Î»Ã¶¾Ù£¨Ïû³ýÃ¶¾Ù¾¯¸æ£©
-#add_compile_options( -fno-short-enums -nostdlib )
-#add_link_options( -fno-short-enums -nostdlib )
-
-# 2. Âã»úÁ´½ÓÅäÖÃ£¨Ïû³ý _exit/_close/_sbrk Î´¶¨Òå´íÎó£©
-#add_link_options( --specs=nosys.specs )
 
 
 
@@ -115,6 +74,8 @@ set(FREERTOS_PORT "GCC_ARM_CR52" CACHE STRING "" FORCE)
 
 # Adding the FreeRTOS-Kernel subdirectory
 add_subdirectory(${FREERTOS_KERNEL_PATH} FreeRTOS-Kernel)
+add_subdirectory(${FREERTOS_ROOT_PATH} root)
+#add_subdirectory(${FREERTOS_ROOT_PATH} driver)
 
 ########################################################################
 # Overall Compile Options
@@ -155,48 +116,48 @@ target_compile_options(freertos_kernel PRIVATE
     $<$<COMPILE_LANG_AND_ID:C,Clang>:-Wno-covered-switch-default>
     $<$<COMPILE_LANG_AND_ID:C,Clang>:-Wno-cast-align> )
 
-#add_executable(${PROJECT_NAME}
-#    main.c
-#)
 
-#target_link_libraries(${PROJECT_NAME} freertos_kernel freertos_config)
 
-#set_property(TARGET freertos_kernel PROPERTY C_STANDARD 90)
-
-# 5. Ô´ÎÄ¼þÄ¿Â¼
-set(SRC_DIR ${CMAKE_SOURCE_DIR})
-set(FREERTOS_DIR ${CMAKE_SOURCE_DIR}/../../)
-
-# ÒµÎñÔ´Âë
-file(GLOB MAIN_SRCS
-    ${SRC_DIR}/*.c
-    ${SRC_DIR}/*.S
-)
-
-# FreeRTOS ÄÚºËÔ´Âë
-file(GLOB FREERTOS_SRCS
-    ${FREERTOS_DIR}/*.c
-    ${FREERTOS_DIR}/libs/*.c
-    ${FREERTOS_DIR}/portable/GCC/ARM_CR52/*.c
-    ${FREERTOS_DIR}/portable/MemMang/*_4.c
-)
-
-# »ã×ÜËùÓÐÔ´Âë
 add_executable(${PROJECT_NAME}.elf
-    ${MAIN_SRCS}
-    ${FREERTOS_SRCS}
+    ${FREERTOS_BOOT_PATH}/start.s
+    main.c
 )
 
-# 6. Í·ÎÄ¼þÂ·¾¶
-target_include_directories(${PROJECT_NAME}.elf PRIVATE
-    ${SRC_DIR}
-    ${SRC_DIR}/../configuration
-    ${FREERTOS_DIR}/include
-    ${FREERTOS_DIR}/portable/GCC/ARM_CR52/
-    # ×ÔÐÐÌí¼ÓÆäËûÇý¶¯/ÍâÉèÍ·ÎÄ¼þ
+
+# ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó½Å±ï¿½ï¿½ï¿½Îª link.ld
+target_link_options(${PROJECT_NAME}.elf PRIVATE
+    -mcpu=cortex-r52
+#    -mthumb
+    -T ${LINKER_SCRIPT}
+    -nostartfiles      # 
+    -nostdlib          # 
+    --specs=nosys.specs
+#    -Wl,-eReset_Handler
+    -Wl,--start-group
+    -lgcc
+    -lc
+    -lm
+    -Wl,--end-group
+    -Wl,--gc-sections
 )
 
-# 7. Êä³ö¶þ½øÖÆ/hexÎÄ¼þ
+
+target_link_libraries(${PROJECT_NAME}.elf 
+    PUBLIC
+        freertos_kernel_include
+        freertos_kernel_port_headers
+    PRIVATE
+        freertos_kernel
+        freertos_vcodec
+        freertos_utils
+#        freertos_boot
+        freertos_driver
+        freertos_config
+)
+
+
+
+# 7. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/hexï¿½Ä¼ï¿½
 add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD
     COMMAND arm-none-eabi-objcopy -O binary ${PROJECT_NAME}.elf ${PROJECT_NAME}.bin
     COMMAND arm-none-eabi-objcopy -O ihex ${PROJECT_NAME}.elf ${PROJECT_NAME}.hex
