@@ -12,7 +12,6 @@
 #define gic_set(off, bit) \
 	*((volatile uint32_t*)(off)) |= (bit)
 
-//#define GIC_DIST_BASE			0x50800000
 #define GIC_DIST_BASE			0xf0000000
 #define GICD_IROUTER_OFFSET 	0x6000
 
@@ -26,7 +25,7 @@
 /* *INDENT-ON* */
 
 void gic_setup_interrupt(uint32_t irq_id);
-void gic_setup(void);
+void gic_setup(uint32_t irq_id);
 uint32_t gic_get_irq(void);
 void gic_ack_irq(uint32_t irq_id);
 

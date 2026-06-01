@@ -38,7 +38,7 @@ void gic_setup_interrupt(uint32_t irq_id)
 	gic_write(GIC_DIST_BASE + 0xc00 + (irq_id/16)*4, 0);
 }
 
-void gic_setup(void)
+void gic_setup(uint32_t irq_id)
 {
 	// we need to use system register access. uvmm does not provide mmio for cpu
 	// interface
@@ -46,7 +46,7 @@ void gic_setup(void)
 			   : : "r" (0x7));
 
 	// timer interrupt: dts irq 11 -> irq_id 27
-	gic_setup_interrupt(27);
+	gic_setup_interrupt(irq_id);
 
 	// enable Group 1 interrupts
 	asm volatile("mcr p15, 0, %0, c12, c12, 7" : : "r" (1)); // ICC_IGRPEN1

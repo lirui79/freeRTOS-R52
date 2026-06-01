@@ -1,48 +1,63 @@
-/*
- * FreeRTOS Kernel V11.3.0
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
- *
- * SPDX-License-Identifier: MIT
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy of
- * this software and associated documentation files (the "Software"), to deal in
- * the Software without restriction, including without limitation the rights to
- * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
- * the Software, and to permit persons to whom the Software is furnished to do so,
- * subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
- * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
- * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
- * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * https://www.FreeRTOS.org
- * https://github.com/FreeRTOS
- *
- */
-
-/*
- * This is a simple main that will start the FreeRTOS-Kernel and run a periodic task
- * that only delays if compiled with the template port, this project will do nothing.
- * For more information on getting started please look here:
- * https://www.freertos.org/Documentation/01-FreeRTOS-quick-start/01-Beginners-guide/02-Quick-start-guide
- */
-
-/* FreeRTOS includes. */
-#include <FreeRTOS.h>
-#include <task.h>
-#include <queue.h>
-#include <timers.h>
-#include <semphr.h>
+#include "FreeRTOS.h"
+#include "task.h"
+#include "uart.h"
+#include "printf.h"
+#include "debug.h"
 #include "gic.h"
+#include "io.h"
+#include "system.h"
 
-/* Standard includes. */
-#include <stdio.h>
+#include <mhu_v3_x_private.h>
+#include <mhu_v3_x.h>
+#include <mhu.h>
+
+//#define TEST_MAILBOX
+#define PLAT_RSE_AP_SND_MHU_BASE	UL(0x49000000)
+#define PLAT_RSE_AP_RCV_MHU_BASE	UL(0x49100000)
+
+#ifdef TEST_RTPS_TRCH_MAILBOX
+int mbox_inits(const void *init_data)
+{
+	enum mhu_error_t err;
+	const struct mhu_addr *mbx_addr = (const struct mhu_addr *)init_data;
+
+	err = mhu_init_sender(mbx_addr->sender_base);
+	if (err != MHU_ERR_NONE) {
+		if (err == MHU_ERR_ALREADY_INIT) {
+			INFO("[RSE-COMMS] Host to RSE MHU driver already initialized\n");
+		} else {
+			ERROR("[RSE-COMMS] Host to RSE MHU driver initialization failed: %d\n",
+			      err);
+			return -1;
+		}
+	}
+
+	err = mhu_init_receiver(mbx_addr->receiver_base);
+	if (err != MHU_ERR_NONE) {
+		if (err == MHU_ERR_ALREADY_INIT) {
+			INFO("[RSE-COMMS] RSE to Host MHU driver already initialized\n");
+		} else {
+			ERROR("[RSE-COMMS] RSE to Host MHU driver initialization failed: %d\n",
+			      err);
+			return -1;
+		}
+	}
+
+	return 0;
+}
+
+static int mhu_init(void)
+{
+	struct mhu_addr mhu_addresses;
+
+	/* Get sender and receiver frames for AP-RSE communication */
+	mhu_addresses.sender_base = PLAT_RSE_AP_SND_MHU_BASE;
+	mhu_addresses.receiver_base = PLAT_RSE_AP_RCV_MHU_BASE;
+
+	/* Initialize the communication channel between AP and RSE */
+	return mbox_inits(&mhu_addresses);
+}
+#endif
 
 #if configUSE_IDLE_HOOK
 void vApplicationIdleHook(void)
@@ -55,95 +70,65 @@ void vApplicationIdleHook(void)
 }
 #endif
 
-
-/*-----------------------------------------------------------*/
-
-static void exampleTask( void * parameters ) __attribute__( ( noreturn ) );
-
-/*-----------------------------------------------------------*/
-
-static void exampleTask( void * parameters )
+static void hvc_putc(int c)
 {
-    /* Unused parameters. */
-    ( void ) parameters;
+  asm volatile (
+    "mov r1, %1\n"
+    "mov r0, %0\n"
+    "hvc #1 \n"
+    : : "i"(0x86000000), "r"(c) : "r0", "r1");
+}
 
-    for( ; ; )
-    {
-        /* Example Task Code */
-        vTaskDelay( 100 ); /* delay 100 ticks */
-    }
+void hvc_puts(char const *s)
+{
+  char c;
+  while ((c = *s++))
+    hvc_putc(c);
 }
 
 
-static void exampleTask1( void * parameters )
+static void task1(void *param)
 {
-    /* Unused parameters. */
-    ( void ) parameters;
-
-    for( ; ; )
-    {
-        /* Example Task Code */
-        vTaskDelay( 100 ); /* delay 100 ticks */
-    }
+	(void)param;
+	while(1) {
+		hvc_puts("task1\n");
+		vTaskDelay(1000);
+	}
 }
 
-
-static void exampleTask2( void * parameters )
+static void task2(void *param)
 {
-    /* Unused parameters. */
-    ( void ) parameters;
-
-    for( ; ; )
-    {
-        /* Example Task Code */
-        vTaskDelay( 100 ); /* delay 100 ticks */
-    }
+	(void)param;
+	while(1) {
+		hvc_puts("task2\n");
+		vTaskDelay(2000);
+	}
 }
-/*-----------------------------------------------------------*/
 
-int main( void )
+int main(void)
 {
-  xTaskCreate(exampleTask1, "example1", 200, NULL, 2, NULL);
-  xTaskCreate(exampleTask2, "example2", 300, NULL, 3, NULL);
+  uart_init();
+  printf("R52 is alive\r\n");
+  
+  //rd/wr register
+  {
+	  uint8_t val=0xff;
+	  val = readb(TIMER_BASE_ADDR);
+	  writeb(val, TIMER_BASE_ADDR);
+  }
+  
+  xTaskCreate(task1, "task1", 200, NULL, 2, NULL);
+  xTaskCreate(task2, "task2", 200, NULL, 1, NULL);
 
-  gic_setup();
+  gic_setup(MAILBOX_IRQ);
+  
+  #ifdef TEST_MAILBOX		
+	mhu_init();
+  #endif
 
-/*
-    static StaticTask_t exampleTaskTCB;
-    static StackType_t exampleTaskStack[ configMINIMAL_STACK_SIZE ];
+  hvc_puts("Hello from FreeRTOS!\n");
+  vTaskStartScheduler();
 
-    ( void ) printf( "Example FreeRTOS Project\n" );
-
-    ( void ) xTaskCreateStatic( &exampleTask,
-                                "example",
-                                configMINIMAL_STACK_SIZE,
-                                NULL,
-                                configMAX_PRIORITIES - 1U,
-                                &( exampleTaskStack[ 0 ] ),
-                                &( exampleTaskTCB ) );//*/
-
-    /* Start the scheduler. */
-    vTaskStartScheduler();
-
-    for( ; ; )
-    {
-        /* Should not reach here. */
-    }
-
-    return 0;
+  while(1);
+  return 0;
 }
-/*-----------------------------------------------------------*/
-
-#if ( configCHECK_FOR_STACK_OVERFLOW > 0 )
-
-    void vApplicationStackOverflowHook( TaskHandle_t xTask,
-                                        char * pcTaskName )
-    {
-        /* Check pcTaskName for the name of the offending task,
-         * or pxCurrentTCB if pcTaskName has itself been corrupted. */
-        ( void ) xTask;
-        ( void ) pcTaskName;
-    }
-
-#endif /* #if ( configCHECK_FOR_STACK_OVERFLOW > 0 ) */
-/*-----------------------------------------------------------*/
