@@ -5,8 +5,24 @@ set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
 enable_language(CXX C ASM)
 
+
+MESSAGE(STATUS "operation system is ${CMAKE_SYSTEM}")
+string(FIND ${CMAKE_SYSTEM} "Linux" SYSTEM)
+if(SYSTEM EQUAL -1)
+  string(FIND ${CMAKE_SYSTEM} "linux" SYSTEM) 
+endif()
+
+if(SYSTEM EQUAL -1)
+  message(STATUS "当前系统为 Windows")
+  set(TOOLCHAINPATH "C:/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin")
+else()
+  message(STATUS "当前系统为 Linux")
+  set(TOOLCHAINPATH "/home/stone_li/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin")
+endif()
+
+
 # Windows
-set(TOOLCHAINPATH "C:/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin")
+#set(TOOLCHAINPATH "C:/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin")
 # Linux
 #set(TOOLCHAINPATH "/home/stone_li/arm-gnu-toolchain-15.2.rel1-x86_64-arm-none-eabi/bin")
 
