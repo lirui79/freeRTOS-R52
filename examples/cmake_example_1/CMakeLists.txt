@@ -3,6 +3,8 @@ project(example)
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)
+#set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+enable_language(CXX C ASM)
 
 # Windows
 set(TOOLCHAINPATH "C:/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin")
@@ -12,6 +14,7 @@ set(TOOLCHAINPATH "C:/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi
 # 你的 ARM 编译器路径（和你命令里一致）
 set(CMAKE_C_COMPILER ${TOOLCHAINPATH}/arm-none-eabi-gcc)
 set(CMAKE_CXX_COMPILER ${TOOLCHAINPATH}/arm-none-eabi-g++)
+#set(CMAKE_ASM_COMPILER ${TOOLCHAINPATH}/arm-none-eabi-gcc)
 set(CMAKE_ASM_COMPILER ${TOOLCHAINPATH}/arm-none-eabi-as)
 
 # 编译器工具
@@ -60,66 +63,16 @@ if (DEFINED FREERTOS_SMP_EXAMPLE AND FREERTOS_SMP_EXAMPLE STREQUAL "1")
     add_compile_options( -DconfigNUMBER_OF_CORES=2 -DconfigUSE_PASSIVE_IDLE_HOOK=0 )
 endif()
 # 2. 内核架构编译参数（完全对齐你当前编译指令）
-set(CPU_FLAGS
-    -mcpu=cortex-r52
-#    -mfpu=vfpv3-d16
-    -mfpu=fpv5-sp-d16
-    -marm
-    -mno-thumb-interwork
-    -mabi=aapcs-linux
-    -mno-unaligned-access
-#    -mfloat-abi=soft
-    -mthumb 
-    -mfloat-abi=hard
-    -mlibarch=armv8-r+crc
-    -march=armv8-r+crc
-)
+
 # 针对 ARM Cortex-R52 (示例，具体取决于你的芯片变体)
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=cortex-r52 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16")
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=cortex-r52 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16")
-#set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -mcpu=cortex-r52 -mthumb -mfloat-abi=hard -mfpu=fpv5-sp-d16")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -v -Og -g -std=gnu99 -mcpu=cortex-r52 -mfloat-abi=hard -mlibarch=armv8-r+crc -march=armv8-r+crc -mfpu=fpv5-d16")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-builtin-printf -fomit-frame-pointer -fno-strict-aliasing -fno-builtin-memcpy -Wall -Wextra -fno-short-enums -nostdlib -D__FREERTOS__")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static ")
+#--no-warn-rwx-segments
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=cortex-r52 -mfloat-abi=hard -mfpu=fpv5-sp-d16")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=cortex-r52 -mfloat-abi=hard -mfpu=fpv5-sp-d16")
+set(CMAKE_ASM_FLAGS "${CMAKE_ASM_FLAGS} -mcpu=cortex-r52 -mfloat-abi=hard -mfpu=fpv5-sp-d16")
 
-# 3. 通用编译选项
-add_compile_options(
-    ${CPU_FLAGS}
-    -v
-    -Og
-    -g
-    -std=gnu99
-    -fno-builtin-printf
-    -fomit-frame-pointer
-    -fno-strict-aliasing
-    -fno-builtin-memcpy
-    -Wall
-    -Wextra
-    # 全局强制32位枚举，彻底消除链接枚举警告
-    -fno-short-enums
-  #  -Wno-sign-conversion        # 关闭符号转换报错（修复libc.c）
-  #  -Wno-error=sign-conversion  # 不把符号转换当错误
-    -nostdlib
-    -D__FREERTOS__
-)
-
-# 4. 链接全局配置
-add_link_options(
-    ${CPU_FLAGS}
-    -fno-short-enums
-    # 裸机无系统，补齐系统调用桩，解决_exit/_sbrk/_write等未定义
-    # 可自行添加链接脚本
-    -nostartfiles
-    -nostdlib  -T${LINKER_SCRIPT}
-    --specs=nosys.specs
-
-    -Wl,--start-group
-    -lgcc
-    -lc
-    -lm
-    -Wl,--end-group
-
-    -Wl,--gc-sections
-)
-
-#
 
 
 # -T${CMAKE_SOURCE_DIR}/link.ld
@@ -178,9 +131,30 @@ target_compile_options(freertos_kernel PRIVATE
 #target_link_options(${PROJECT_NAME}.elf PRIVATE -T${LINKER_SCRIPT})
 
 add_executable(${PROJECT_NAME}.elf
+#    ${FREERTOS_BOOT_PATH}/start.s
+    ${CMAKE_CURRENT_SOURCE_DIR}/start.s
     main.c
-    ${FREERTOS_BOOT_PATH}/start.s
 )
+
+#set_target_properties(${PROJECT_NAME}.elf PROPERTIES LINKER_LANGUAGE C)
+
+# 假设链接脚本名为 link.ld
+target_link_options(${PROJECT_NAME}.elf PRIVATE
+    -mcpu=cortex-r52
+#    -mthumb
+    -T ${CMAKE_CURRENT_SOURCE_DIR}/link.ld
+    -nostartfiles      # ✅ 放在这里
+    -nostdlib          # ✅ 放在这里
+    --specs=nosys.specs
+#    -Wl,-eReset_Handler
+    -Wl,--start-group
+    -lgcc
+    -lc
+    -lm
+    -Wl,--end-group
+    -Wl,--gc-sections
+)
+
 
 target_link_libraries(${PROJECT_NAME}.elf 
     PUBLIC
