@@ -359,7 +359,13 @@ irqreturn_t hantrovcmd_isr(int irq, void *handler)
 		spin_unlock_irqrestore(dev->spinlock, flags);
 
 		//to notify owner which triggered the abort
-		wake_up_interruptible_all(dev->abort_waitq);
+		//wake_up_interruptible_all(dev->abort_waitq);
+		{
+			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+			xSemaphoreGiveFromISR(dev->abort_waitq, &xHigherPriorityTaskWoken);
+			//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		}
+
 		handled++;
 		return IRQ_HANDLED;
 	}

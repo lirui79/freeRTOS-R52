@@ -194,8 +194,8 @@ struct si_linked_list {
 struct proc_obj {
 	u32 total_workload;
 	spinlock_t spinlock;
-	wait_queue_head_t resource_waitq;
-	wait_queue_head_t job_waitq;
+    SemaphoreHandle_t resource_waitq;//	wait_queue_head_t resource_waitq;
+	SemaphoreHandle_t job_waitq;//wait_queue_head_t job_waitq;
 	u32 module_type;	/* correspond to filp, indicates subsys type */
 
 	spinlock_t job_lock;
@@ -341,9 +341,9 @@ struct hantrovcmd_dev {
 
 	//translation offset from bus addr (ba) to physical addr (pa).
 	ptr_t pa_trans_offset;
-	wait_queue_head_t abort_queue_vcmd;
+	//wait_queue_head_t abort_queue_vcmd;
 
-	wait_queue_head_t *abort_waitq;	//point to abort_queue_vcmd
+	SemaphoreHandle_t abort_waitq;//wait_queue_head_t *abort_waitq;	//point to abort_queue_vcmd
 
 	u32 abort_mode;		//0: stop when JMP/END; 1: stop curr-cmd (imediately);
 	enum vcmd_sw_init_mode init_mode;
@@ -438,9 +438,8 @@ typedef struct {
 
 	volatile u8 *mmu_hwregs[MAX_VCMD_NUM][2];
 
-//	struct task_struct *kthread;
-    TaskHandle_t        kthread;//	u8 stop_kthread;
-	wait_queue_head_t kthread_waitq;
+//	struct task_struct *kthread;//	u8 stop_kthread;	wait_queue_head_t   kthread_waitq;
+    TaskHandle_t        kthread;
 
 #ifdef SUPPORT_DBGFS
 	void *dbgfs_ctx;

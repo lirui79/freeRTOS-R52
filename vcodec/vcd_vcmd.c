@@ -223,8 +223,7 @@ static void dev_ctx_init(vcmd_mgr_t *vcmd_mgr)
 		dev->spinlock = &dev->owner_lock_vcmd;
 		spin_lock_init(dev->spinlock);
 		spin_lock_init(&dev->abn_irq_lock);
-		dev->abort_waitq = &dev->abort_queue_vcmd;
-		init_waitqueue_head(dev->abort_waitq);
+		dev->abort_waitq = xSemaphoreCreateBinary();//dev->abort_waitq = &dev->abort_queue_vcmd;		//init_waitqueue_head(dev->abort_waitq);
 		dev->buff_empty_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&dev->buff_empty_waitq);
 
 		init_bi_list(&dev->work_list);

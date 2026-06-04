@@ -110,18 +110,29 @@ static inline void iowrite32(uint32_t value, volatile uint32_t *addr)
 }
 
 /* mutex */
+typedef   UBaseType_t  spinlock_t;
+#define   spin_lock_init(x) do {*(x) = pdFALSE;} while(0)
+#define   spin_lock(x)  do { *(x) = 0; taskENTER_CRITICAL();} while(0)
+#define   spin_unlock(x)  do { *(x) = 0; taskEXIT_CRITICAL();} while(0)
+#define   spin_lock_irqsave(x, flag)   do { *(x) = 0; flags = taskENTER_CRITICAL_FROM_ISR();} while(0)
+#define   spin_unlock_irqrestore(x, flag) do { *(x) = 0; taskEXIT_CRITICAL_FROM_ISR(flag);} while(0)
+
+/*
 typedef unsigned int spinlock_t;
 #define   spin_lock_init(x) (*(x) = 0)
 #define   spin_lock(x)  do { *(x) = 0 ;} while(0)
 #define   spin_unlock(x)  do { *(x) = 0 ;} while(0)
 #define   spin_lock_irqsave(x, flag)  do { flag ;} while(0)
 #define   spin_unlock_irqrestore(x, flag) do { flag ;} while(0)
+*/
 
 /* interrupt wakeup */
+/*
 typedef unsigned int wait_queue_head_t;
 #define   init_waitqueue_head(x)  (*(x) = 0)
 #define   wake_up_interruptible_all(x) (*(x) = 0)
 #define   wait_event_interruptible(x, cond) ((x) = 0,cond,0x00)
+*/
 
 /* xtimer */
 

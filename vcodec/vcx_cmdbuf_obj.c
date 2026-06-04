@@ -387,8 +387,8 @@ struct proc_obj *create_process_object(void)
 
 	memset(po, 0, sizeof(struct proc_obj));
 	spin_lock_init(&po->spinlock);
-	init_waitqueue_head(&po->resource_waitq);
-	init_waitqueue_head(&po->job_waitq);
+	po->resource_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->resource_waitq);
+	po->job_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->job_waitq);
 
 	spin_lock_init(&po->job_lock);
 	init_bi_list(&po->job_done_list);
@@ -421,12 +421,22 @@ static int acquire_process_resource(struct proc_obj *po, u32 workload, u32 maxwo
 	spin_lock(&po->spinlock);
 	po->total_workload += workload;
 	spin_unlock(&po->spinlock);
+	while (1) {
+		if (wait_process_resource_rdy(po, maxworkload))
+		    return 0;
+        if (xSemaphoreTake(po->resource_waitq, pdMS_TO_TICKS(1000)) == pdTRUE) {
+			continue;
+		} else {
+			vcmd_klog(LOGLVL_ERROR, "%s: wait event is interrupted!", __func__);
+			return -1;
+		}
+	}
+	/*
 	if (wait_event_interruptible(po->resource_waitq,
 									wait_process_resource_rdy(po, maxworkload))) {
 		vcmd_klog(LOGLVL_ERROR, "%s: wait event is interrupted!", __func__);
 		return -1;
-	}
-
+	}*/
 	return 0;
 }
 
@@ -441,7 +451,7 @@ static void return_process_resource(struct proc_obj *po,
 		po->total_workload -= obj->workload;
 		spin_unlock(&po->spinlock);
 		obj->workload = 0;
-		wake_up_interruptible_all(&po->resource_waitq);
+		xSemaphoreGive(po->resource_waitq);//wake_up_interruptible_all(&po->resource_waitq);
 	}
 }
 
@@ -487,8 +497,11 @@ void proc_add_done_job(vcmd_mgr_t *vcmd_mgr, struct cmdbuf_obj *obj)
 
 	spin_unlock_irqrestore(&po->job_lock, flags);
 
-	if (is_empty || is_wait)
-		wake_up_interruptible_all(&po->job_waitq);
+	if (is_empty || is_wait) {//wake_up_interruptible_all(&po->job_waitq);
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR(po->job_waitq, &xHigherPriorityTaskWoken);
+		//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	}
 }
 
 /**
@@ -1036,6 +1049,18 @@ int vcmd_abort(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev,
 								HWIF_VCMD_START_TRIGGER, 0);
 	spin_unlock_irqrestore(dev->spinlock, flags);
 	if (vcodec_get_config()->vcmd_isr_polling == 0) {
+		while (1) {
+			if (dev->state == VCMD_STATE_IDLE)
+			   goto isr_polling;
+			vcmd_klog(LOGLVL_BRIEF, "%s: continue to wait vcmd aborted!!!\n", __func__);
+			if (xSemaphoreTake(dev->abort_waitq, pdMS_TO_TICKS(1000)) == pdTRUE) {
+			    vcmd_klog(LOGLVL_ERROR, "%s: abort_waitq is signaled!!!\n", __func__);
+				continue;
+			} else {
+				goto out;
+			}
+		}
+/*
 		if (wait_event_interruptible(*dev->abort_waitq,
 						(dev->state == VCMD_STATE_IDLE))) {
 			vcmd_klog(LOGLVL_ERROR, "%s: abort_waitq is signaled!!!\n", __func__);
@@ -1044,7 +1069,7 @@ int vcmd_abort(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev,
 		} else {
 			goto out;
 		}
-
+*/
 	}
 
 isr_polling:
@@ -1477,11 +1502,22 @@ long wait_cmdbuf_ready(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 #endif
 	}
 
+	while (1) {
+		if (proc_get_done_job(vcmd_mgr, po, &obj))
+		   break;
+        if (xSemaphoreTake(po->job_waitq, pdMS_TO_TICKS(1000)) == pdTRUE) {
+			continue;
+		} else {
+		    vcmd_klog(LOGLVL_ERROR, "vcmd_wait_queue_0 interrupted\n");
+		    return -ERESTARTSYS;
+		}
+	}
+/*
 	if (wait_event_interruptible(po->job_waitq,
 						proc_get_done_job(vcmd_mgr, po, &obj))) {
 		vcmd_klog(LOGLVL_ERROR, "vcmd_wait_queue_0 interrupted\n");
 		return -ERESTARTSYS;
-	}
+	}*/
 
 	*done_id = obj->cmdbuf_id;
 	if (obj->cmdbuf_run_done == 1) {
