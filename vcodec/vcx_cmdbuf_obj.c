@@ -16,6 +16,7 @@
 
 #include "vcx_watchdog.h"
 #include "vcx_vcmd_irq.h"
+#include "vcx_vcmd_defs.h"
 #include "vcx_cmdbuf_obj.h"
 #include "vcx_vcmd_dbgfs.h"
 #include "vcx_vcmd_dbg_log.h"
@@ -404,7 +405,39 @@ void free_process_object(struct proc_obj *po)
 		vcmd_klog(LOGLVL_ERROR, "%s: po is NULL!\n", __func__);
 		return;
 	}
+	if (po->resource_waitq)
+		vSemaphoreDelete(po->resource_waitq);
+	if (po->job_waitq)
+		vSemaphoreDelete(po->job_waitq);
+	po->resource_waitq = NULL;
+	po->job_waitq = NULL;
 	vfree(po);
+}
+
+struct proc_obj *init_process_object(struct proc_obj *po) {
+	memset(po, 0, sizeof(struct proc_obj));
+	spin_lock_init(&po->spinlock);
+	po->resource_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->resource_waitq);
+	po->job_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->job_waitq);
+
+	spin_lock_init(&po->job_lock);
+	init_bi_list(&po->job_done_list);
+	po->session   = NULL;
+	return po;
+}
+
+void   exit_process_object(struct proc_obj *po) {
+	if (!po) {
+		vcmd_klog(LOGLVL_ERROR, "%s: po is NULL!\n", __func__);
+		return;
+	}
+	if (po->resource_waitq)
+		vSemaphoreDelete(po->resource_waitq);
+	if (po->job_waitq)
+		vSemaphoreDelete(po->job_waitq);
+	po->resource_waitq = NULL;
+	po->job_waitq = NULL;
+	po->session   = NULL;
 }
 
 /**
@@ -1469,6 +1502,110 @@ long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 
 //	up(&vcmd_mgr->module_mgr[obj->module_type].sem);
 
+	return 0;
+}
+
+int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdReqRunCmdBuf_Body_t *cmd_body) {
+	struct cmdbuf_obj *obj;
+	bi_list_node *curr_node;
+
+	struct hantrovcmd_dev *dev = NULL;
+	unsigned long flags;
+	int ret;
+	uint16_t cmdbuf_id = cmd_body->cmdbuf_id;
+	uint16_t batchcount = ((cmd_body->interrupt_ctrl >> 32) & 0xff);
+
+	struct cmd_jmp_t *cmd_jmp;
+
+	if (cmdbuf_id >= SLOT_NUM_CMDBUF) {		//should not happen
+		vcmd_klog(LOGLVL_ERROR, "%s: ERROR cmdbuf_id %d!!\n", __func__, cmdbuf_id);
+		return -1;
+	}
+
+	curr_node = &vcmd_mgr->nodes[cmdbuf_id];
+	obj = (struct cmdbuf_obj *)curr_node->data;
+/*
+	if (obj->po != po) {
+		//should not happen
+		vcmd_klog(LOGLVL_ERROR, "%s: cmdbuf[%d] po not match: owned by %p, released by %p!!\n",
+						__func__, cmdbuf_id, obj->po, po);
+		return -1;
+	}//*/
+
+	obj->cmdbuf_size = cmd_body->cmdbuf_size;
+	obj->interrupt_ctrl = cmd_body->interrupt_ctrl;
+
+#ifdef VCMD_DEBUG_INTERNAL
+	_dbg_log_cmdbuf(obj);
+#endif
+
+	//0: has jmp opcode,1 has end code
+	obj->has_jmp_cmd = (EXCH_G_BIT(cmd_body->input_mask, EXCH_END_CMD_BIT)) ? 0 : 1;
+
+	if (obj->has_jmp_cmd) {
+		//last command is JMP, get its IE value.
+		cmd_jmp = _get_jmp_cmd(obj);
+		vcmd_klog(LOGLVL_FLOW, "has jmp cmd and the last cmd is JMP!\n");
+
+		if ((cmd_jmp->opcode & OPCODE_MASK) != OPCODE_JMP) {
+			vcmd_klog(LOGLVL_ERROR, "%s: cmdbuf[%d] is not terminated by JMP, not match with its flag!",
+					  __func__, obj->cmdbuf_id);
+			return -1;
+		}
+		obj->jmp_ie = 0;
+		if (obj->interrupt_ctrl >> 31)
+			obj->jmp_ie = obj->interrupt_ctrl & 1; //force jmp_ie to be 1 or 0
+		else if (JMP_G_IE(cmd_jmp->opcode))
+			obj->jmp_ie = 1;
+	}
+
+	ret = select_vcmd(vcmd_mgr, curr_node);
+	if (ret) {
+		return ret;
+	}
+
+	dev = &vcmd_mgr->dev_ctx[obj->core_id];
+	cmd_body->core_id = obj->core_id;
+	vcmd_klog(LOGLVL_FLOW, "Assign cmdbuf[%d] to core[%d]\n",
+			  cmdbuf_id, cmd_body->core_id);
+
+	//start to run
+	spin_lock_irqsave(dev->spinlock, flags);
+	if (dev->state != VCMD_STATE_WORKING) {
+		//start vcmd
+		vcmd_start(dev, 0);
+	} else {
+		dev->sw_cmdbuf_rdy_num++;
+		//if ((batchcount > 0 && obj->jmp_ie == 1 && vcmd_mgr->module_mgr[VCMD_TYPE_ENCODER].num == 1) ||
+		//	batchcount == 0 || vcmd_mgr->module_mgr[VCMD_TYPE_ENCODER].num > 1) {
+		if ((batchcount > 0 && obj->jmp_ie == 1 && vcmd_mgr->module_mgr[obj->module_type].num == 1) ||
+			batchcount == 0 || vcmd_mgr->module_mgr[obj->module_type].num > 1) {
+#ifdef SUPPORT_DBGFS
+			_dbgfs_record_link_time(dev->dbgfs_info, cmdbuf_id,
+									dev->sw_cmdbuf_rdy_num,
+									obj->workload);
+#endif
+			//just update cmdbuf ready number
+			vcmd_write_register_value((const void *)dev->hwregs,
+										dev->reg_mirror,
+										HWIF_VCMD_RDY_CMDBUF_COUNT,
+										dev->sw_cmdbuf_rdy_num);
+#ifdef SUPPORT_WATCHDOG
+			_vcmd_watchdog_feed(dev, 0);
+#endif
+		}
+	}
+
+	//new cmdbuf linked, and free the removeable cmdbuf.
+	if (curr_node->prev) {
+		obj = (struct cmdbuf_obj *)curr_node->prev->data;
+		if (obj->cmdbuf_need_remove) {
+			//free the job
+			dev_remove_job(vcmd_mgr, dev, curr_node->prev);
+		}
+	}
+
+	spin_unlock_irqrestore(dev->spinlock, flags);
 	return 0;
 }
 

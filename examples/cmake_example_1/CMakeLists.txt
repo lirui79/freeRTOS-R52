@@ -103,8 +103,12 @@ set(FREERTOS_PORT "GCC_ARM_CR52" CACHE STRING "" FORCE)
 
 # Adding the FreeRTOS-Kernel subdirectory
 add_subdirectory(${FREERTOS_KERNEL_PATH} FreeRTOS-Kernel)
-add_subdirectory(${FREERTOS_ROOT_PATH} root)
-#add_subdirectory(${FREERTOS_ROOT_PATH} driver)
+add_subdirectory(${FREERTOS_ROOT_PATH}/include include)
+add_subdirectory(${FREERTOS_ROOT_PATH}/mailbox mailbox)
+add_subdirectory(${FREERTOS_ROOT_PATH}/vcodec vcodec)
+add_subdirectory(${FREERTOS_DRIVER_PATH} driver)
+add_subdirectory(${FREERTOS_UTILS_PATH} utils)
+#add_subdirectory(${FREERTOS_ROOT_PATH} root)
 
 ########################################################################
 # Overall Compile Options
@@ -176,6 +180,7 @@ target_link_options(${PROJECT_NAME}.elf PRIVATE
 target_link_libraries(${PROJECT_NAME}.elf 
     PUBLIC
         freertos_kernel_include
+        freertos_mailbox_include
         freertos_kernel_port_headers
     PRIVATE
         freertos_kernel
@@ -184,6 +189,7 @@ target_link_libraries(${PROJECT_NAME}.elf
 #        freertos_boot
         freertos_driver
         freertos_config
+        freertos_mailbox
 )
 
 

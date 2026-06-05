@@ -21,6 +21,7 @@
 #include "osal_freertos.h" /* needed for the _IOW etc stuff used later */
 #endif
 
+#include "cmdef.h"
 #include "vcx_vcmd.h"
 #include "vcx_vcmd_priv.h"
 
@@ -45,6 +46,10 @@ struct proc_obj *create_process_object(void);
 
 void free_process_object(struct proc_obj *po);
 
+struct proc_obj *init_process_object(struct proc_obj *po);
+
+void   exit_process_object(struct proc_obj *po);
+
 void proc_add_done_job(vcmd_mgr_t *vcmd_mgr, struct cmdbuf_obj *obj);
 
 int dev_delink_job(struct hantrovcmd_dev *dev,
@@ -66,6 +71,8 @@ long release_cmdbuf(vcmd_mgr_t *vcmd_mgr,
 
 long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 								struct exchange_parameter *param);
+
+int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdReqRunCmdBuf_Body_t *cmd_body);
 
 long wait_cmdbuf_ready(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 								u16 cmdbuf_id, u16 *done_id);

@@ -11,63 +11,52 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                            include vcodec header                             **
+**                      include command session header                          **
 *********************************************************************************/
 
-#ifndef _VCODEC_H_
-#define _VCODEC_H_
+#ifndef _COMMAND_SESSION_H_
+#define _COMMAND_SESSION_H_
 
+#include <stdint.h>
+#include <stddef.h>
 #include "cmdef.h"
-
-enum {
-	LOGLVL_VERBOSE = 0,		// log all
-	LOGLVL_FLOW,			// log all debug msg
-	LOGLVL_CONFIG,			// log ctrl/config info, mostly at beginning
-	LOGLVL_BRIEF,			// log critical point
-	LOGLVL_WARNING,			// log warning msg
-	LOGLVL_ERROR,			// log error
-};
-/* declarations */
-
-#define vcmd_klog(lvl, fmt, ...) {\
-	if (lvl == LOGLVL_ERROR)	\
-		printf("ERROR hantrovcmd: " fmt, ##__VA_ARGS__);	\
-	else if (lvl >= vcodec_get_config()->vsi_kloglvl)		\
-		printf("INFO hantrovcmd: " fmt, ##__VA_ARGS__);	\
-}
-
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+#define CMD_SESSION_MAX  32
+
+typedef enum {
+    CMD_SESSION_STATUS_IDLE = 0,
+    CMD_SESSION_STATUS_RUN,
+    CMD_SESSION_STATUS_EXIT,
+    CMD_SESSION_STATUS_STOP
+} cmd_session_status_t;
+
+struct proc_obj;
+
+//session
 typedef struct {
-//    uint32_t vcmd_supported;
-    uint32_t     vcmd_isr_polling;
-    uint32_t     vsi_kloglvl;
-    uint32_t     arbiter_weight;
-    uint32_t     arbiter_urgent;
-    uint32_t     arbiter_timewindow;
-    uint32_t     arbiter_bw_overflow;
-    uint64_t     sw_timeout_time;
-    uint64_t     ddr_offset;
-#ifdef SUPPORT_MMU
-    uint32_t     mmu_enable;
-#endif
-} vcodec_config_t;
+    uint32_t               sessionID;
+    uint32_t               seqRNum;// sequence number, from 0 to 0xFFFFFFFF
+    uint32_t               seqSNum;// sequence number, from 0 to 0xFFFFFFFF
+    uint32_t               status;
+    uint64_t               procObj;
+    struct proc_obj       *proc;
+} cmd_session_t;
 
+int32_t        cmd_session_init(cmd_session_t *session, struct proc_obj *proc);
 
-vcodec_config_t *vcodec_get_config(void);
+int32_t        cmd_session_check(cmd_session_t *session, cmdMsg_t *cmdMsg);
 
-int32_t          vcodec_init(cmdMsg_t *cmdMsg);
+int32_t        cmd_session_system(cmd_session_t *session, cmdMsg_t *cmdMsg);
 
-int32_t          vcodec_init_vcmd(cmdMsg_t *cmdMsg);
-
-int32_t          vcodec_run_cmdbuf(cmdMsg_t *cmdMsg);
+int32_t        cmd_session_vcodec(cmd_session_t *session, cmdMsg_t *cmdMsg);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /*_VCODEC_H_*/
+#endif /*_COMMAND_SESSION_H_*/

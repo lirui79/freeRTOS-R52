@@ -9,6 +9,7 @@ add_library(freertos_utils STATIC)
 
 target_sources(freertos_utils PRIVATE
     libc.c
+    crc32.c
     printf.c
 )
 

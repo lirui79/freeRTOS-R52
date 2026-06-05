@@ -6,6 +6,7 @@
 #include "gic.h"
 #include "io.h"
 #include "system.h"
+#include "cmd.h"
 
 #include <mhu_v3_x_private.h>
 #include <mhu_v3_x.h>
@@ -92,6 +93,7 @@ static void task1(void *param)
 	(void)param;
 	while(1) {
 		hvc_puts("task1\n");
+		cmd_recv(NULL);
 		vTaskDelay(1000);
 	}
 }
