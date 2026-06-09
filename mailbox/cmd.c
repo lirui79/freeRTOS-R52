@@ -19,7 +19,9 @@
 #include "crc32.h"
 #include "vcodec.h"
 #include "cmd_priv.h"
-
+#include <mhu_v3_x_private.h>
+#include <mhu_v3_x.h>
+#include <mhu.h>
 
 
 void cmd_init(cmdMsg_t *cmdMsg) {
@@ -32,15 +34,35 @@ void cmd_init(cmdMsg_t *cmdMsg) {
 
 
 
-int32_t cmd_recv(cmdMsg_t *cmdMsg) {
-   // mailbox_recv(cmdMsg);
-
-    cmd_proc(cmdMsg);
-    return 0;
+int32_t cmd_recv(void) {
+    int32_t retCode = 0;
+    size_t  cmdSize = CMD_MSG_MAX_SIZE;
+    cmdMsg_t *cmdMsg = cmd_dequeue_cmdMsg();
+    if (cmdMsg == NULL) {
+        return -1;
+    }
+// mailbox_recv(cmdMsg);
+    retCode = mhu_receive_data((uint8_t *)cmdMsg, &cmdSize);
+    cmd_queue_cmdMsg(cmdMsg);
+    return retCode;
 }
 
 int32_t cmd_send(cmdMsg_t *cmdMsg) {
-   cmdMsg->crc32 = crc32_calc((const uint8_t *)cmdMsg, cmdMsg->cmdSize);
-   // mailbox_send(cmdMsg);
-   return 0;
+    int32_t retCode = 0;
+    cmdMsg->crc32 = crc32_calc((const uint8_t *)cmdMsg, cmdMsg->cmdSize);
+// mailbox_send(cmdMsg);
+    retCode = mhu_send_data((const uint8_t *)cmdMsg, cmdMsg->cmdSize);
+    cmd_release_cmdMsg(cmdMsg);
+    return retCode;
+}
+
+int32_t cmd_proc(void) {
+    cmdMsg_t *cmdMsg = cmd_acquire_cmdMsg();
+    if (cmdMsg == NULL) {
+        return -1;
+    }
+    cmd_proc_cmdMsg(cmdMsg);
+    cmd_release_cmdMsg(cmdMsg);
+    return 0;
+
 }

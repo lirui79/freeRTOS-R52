@@ -25,10 +25,11 @@ extern "C" {
 
 void cmd_init(cmdMsg_t *cmdMsg);
 
-
-int32_t cmd_recv(cmdMsg_t *cmdMsg);
+int32_t cmd_recv(void);
 
 int32_t cmd_send(cmdMsg_t *cmdMsg);
+
+int32_t cmd_proc(void);
 
 
 #ifdef __cplusplus

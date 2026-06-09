@@ -746,7 +746,7 @@ static void vcmd_write_core_regs(vcmd_mgr_t *vcmd_mgr, struct core_regs_wr *core
  * @brief vcmd driver initialization
  * @return int __init: 0: successful; other: failed.
  */
-int vce_vcmd_init(void **_vcmd_mgr)
+int vce_vcmd_init(vcmd_mgr_t **_vcmd_mgr)
 {
 	int result = 0;
 	vcmd_mgr_t *vcmd_mgr;
@@ -823,7 +823,7 @@ int vce_vcmd_init(void **_vcmd_mgr)
 	vcmd_klog(LOGLVL_CONFIG, "vcx_vcmd_driver: module inserted. Major <%d>\n",
 		vcmd_mgr->hantrovcmd_major);
 
-	*_vcmd_mgr = (void *)vcmd_mgr;
+	*_vcmd_mgr = (vcmd_mgr_t *)vcmd_mgr;
 
 	return 0;
 

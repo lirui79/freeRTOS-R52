@@ -63,8 +63,9 @@ int32_t          vcodec_init(cmdMsg_t *cmdMsg);
 
 int32_t          vcodec_init_vcmd(cmdMsg_t *cmdMsg);
 
-int32_t          vcodec_run_cmdbuf(cmdMsg_t *cmdMsg);
+int32_t          vcx_vcmd_init(cmdMsg_t *cmdMsg);
 
+int32_t          vcx_vcmd_exit(cmdMsg_t *cmdMsg);
 
 #ifdef __cplusplus
 }

@@ -80,7 +80,7 @@ typedef u64 ptr_t;
 //#define PDEBUG(fmt, args...)           /* not debugging: nothing */
 
 #define vmalloc  pvPortMalloc
- #define vfree   vPortFree
+#define vfree    vPortFree
 
 #define __iomem
 
@@ -114,7 +114,7 @@ typedef   UBaseType_t  spinlock_t;
 #define   spin_lock_init(x) do {*(x) = pdFALSE;} while(0)
 #define   spin_lock(x)  do { *(x) = 0; taskENTER_CRITICAL();} while(0)
 #define   spin_unlock(x)  do { *(x) = 0; taskEXIT_CRITICAL();} while(0)
-#define   spin_lock_irqsave(x, flag)   do { *(x) = 0; flags = taskENTER_CRITICAL_FROM_ISR();} while(0)
+#define   spin_lock_irqsave(x, flag)   do { *(x) = 0; flag = taskENTER_CRITICAL_FROM_ISR();} while(0)
 #define   spin_unlock_irqrestore(x, flag) do { *(x) = 0; taskEXIT_CRITICAL_FROM_ISR(flag);} while(0)
 
 /*

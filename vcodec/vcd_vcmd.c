@@ -639,7 +639,7 @@ static void SubsysToVcmdCoreCfg(vcmd_mgr_t *vcmd_mgr)
  * @param void *platformdev: platform device handler
  * @return void *: NULL: failed; other: vcmd driver handler.
  */
-int vcd_vcmd_init(void **_vcmd_mgr)
+int vcd_vcmd_init(vcmd_mgr_t **_vcmd_mgr)
 {
 	int result = 0;
 	vcmd_mgr_t *vcmd_mgr;
@@ -716,7 +716,7 @@ int vcd_vcmd_init(void **_vcmd_mgr)
 	vcmd_klog(LOGLVL_CONFIG, "vcx_vcmd_driver: module inserted. Major <%d>\n",
 		vcmd_mgr->hantrovcmd_major);
 
-	*_vcmd_mgr = (void *)vcmd_mgr;
+	*_vcmd_mgr = (vcmd_mgr_t *)vcmd_mgr;
 
 	return 0;
 

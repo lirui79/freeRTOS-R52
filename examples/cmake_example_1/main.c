@@ -8,11 +8,14 @@
 #include "system.h"
 #include "cmd.h"
 
+#include "vcodec.h"
+
 #include <mhu_v3_x_private.h>
 #include <mhu_v3_x.h>
 #include <mhu.h>
 
-//#define TEST_MAILBOX
+#define TEST_MAILBOX
+#define TEST_RTPS_TRCH_MAILBOX
 #define PLAT_RSE_AP_SND_MHU_BASE	UL(0x49000000)
 #define PLAT_RSE_AP_RCV_MHU_BASE	UL(0x49100000)
 
@@ -93,7 +96,7 @@ static void task1(void *param)
 	(void)param;
 	while(1) {
 		hvc_puts("task1\n");
-		cmd_recv(NULL);
+		cmd_recv();
 		vTaskDelay(1000);
 	}
 }
@@ -103,13 +106,14 @@ static void task2(void *param)
 	(void)param;
 	while(1) {
 		hvc_puts("task2\n");
+		cmd_proc();
 		vTaskDelay(2000);
 	}
 }
 
-int main(void)
-{
+int main(void) {
   uart_init();
+  vcx_vcmd_init(NULL);
   printf("R52 is alive\r\n");
   
   //rd/wr register
@@ -118,19 +122,21 @@ int main(void)
 	  val = readb(TIMER_BASE_ADDR);
 	  writeb(val, TIMER_BASE_ADDR);
   }
-  
-  xTaskCreate(task1, "task1", 200, NULL, 2, NULL);
-  xTaskCreate(task2, "task2", 200, NULL, 1, NULL);
 
   gic_setup(MAILBOX_IRQ);
-  
-  #ifdef TEST_MAILBOX		
-	mhu_init();
-  #endif
+
+#ifdef TEST_MAILBOX
+  mhu_init();
+#endif
+
+  xTaskCreate(task1, "task1", 200, NULL, 2, NULL);
+  xTaskCreate(task2, "task2", 200, NULL, 1, NULL);
 
   hvc_puts("Hello from FreeRTOS!\n");
   vTaskStartScheduler();
 
   while(1);
+
+  vcx_vcmd_exit(NULL);
   return 0;
 }

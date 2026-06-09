@@ -31,6 +31,7 @@ target_link_libraries(freertos_mailbox
     PRIVATE
         freertos_utils
         freertos_vcodec
+        freertos_driver
 )
 
 ########################################################################

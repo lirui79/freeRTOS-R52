@@ -11,65 +11,47 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                      include command private header                          **
+**                           include c queue header                             **
 *********************************************************************************/
 
-#ifndef _CMD_PRIVATE_H_
-#define _CMD_PRIVATE_H_
+#ifndef _C_QUEUE_H_
+#define _C_QUEUE_H_
 
 #include <stdint.h>
 #include <stddef.h>
-#include "cmdef.h"
-#include "vcx_vcmd_priv.h"
-#include "cmd_session.h"
-#include "bqueue.h"
-
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
-typedef struct {
-    uint32_t           r52coreID;// r52 core ID  from 0
-    uint32_t           vtb_size; //
-    cmd_session_t      vtb[CMD_SESSION_MAX];// vcodec session table
-    struct proc_obj    ptb[CMD_SESSION_MAX];// process table
-    vcmd_mgr_t*        mtb[VCMD_MGR_ID_MAX];	// vcmd manager  0-vcmd mgr enc, 1- vcmd mgr dec
-    BQueueHandle_t     cmd_queue; // command queue
-} cmd_priv_t;
+typedef void*  CQueueHandle_t;
 
+CQueueHandle_t CQueueCreate(uint32_t qSize, uint32_t iSize);
 
-int               cmd_init_priv(cmd_priv_t *priv);
+void           CQueueDelete(CQueueHandle_t handle);
 
-cmd_priv_t*       cmd_get_priv(void);
+uint32_t       CQueueSize(CQueueHandle_t handle);
 
-vcmd_mgr_t*       cmd_get_mgr(uint32_t mgrID);
+uint32_t       CQueueCount(CQueueHandle_t handle);
 
-cmd_session_t*    cmd_get_session(uint32_t sessionID);
+uint32_t       CQueueItemSize(CQueueHandle_t handle);
 
-cmd_session_t*    cmd_get_idle_session();
+int32_t        CQueueEnqueue(CQueueHandle_t handle, void* item);
 
-struct proc_obj*  cmd_get_proc(uint32_t sessionID);
+void*          CQueueDequeue(CQueueHandle_t handle);
 
-cmdMsg_t*         cmd_dequeue_cmdMsg(void);
+void*          CQueuePeek(CQueueHandle_t handle);
 
-cmdMsg_t*         cmd_acquire_cmdMsg(void);
+int32_t        CQueueEnqueueFromISR(CQueueHandle_t handle, void* item);
 
-int32_t           cmd_release_cmdMsg(cmdMsg_t* cmdMsg);
+void*          CQueueDequeueFromISR(CQueueHandle_t handle);
 
-int32_t           cmd_queue_cmdMsg(cmdMsg_t* cmdMsg);
-
-int32_t           cmd_cancel_cmdMsg(cmdMsg_t* cmdMsg);
-
-int32_t           cmd_proc_cmdMsg(cmdMsg_t *cmdMsg);
-
-
-
+void*          CQueuePeekFromISR(CQueueHandle_t handle);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /*_CMD_PRIVATE_H_*/
+#endif /*_C_QUEUE_H_*/

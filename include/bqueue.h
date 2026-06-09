@@ -11,65 +11,56 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                      include command private header                          **
+**                       include c buffer queue header                          **
 *********************************************************************************/
 
-#ifndef _CMD_PRIVATE_H_
-#define _CMD_PRIVATE_H_
+#ifndef _BUFFER_QUEUE_H_
+#define _BUFFER_QUEUE_H_
 
 #include <stdint.h>
 #include <stddef.h>
-#include "cmdef.h"
-#include "vcx_vcmd_priv.h"
-#include "cmd_session.h"
-#include "bqueue.h"
-
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 
-typedef struct {
-    uint32_t           r52coreID;// r52 core ID  from 0
-    uint32_t           vtb_size; //
-    cmd_session_t      vtb[CMD_SESSION_MAX];// vcodec session table
-    struct proc_obj    ptb[CMD_SESSION_MAX];// process table
-    vcmd_mgr_t*        mtb[VCMD_MGR_ID_MAX];	// vcmd manager  0-vcmd mgr enc, 1- vcmd mgr dec
-    BQueueHandle_t     cmd_queue; // command queue
-} cmd_priv_t;
 
+typedef void*  BQueueHandle_t;
 
-int               cmd_init_priv(cmd_priv_t *priv);
+BQueueHandle_t BQueueCreate(uint32_t qSize, uint32_t iSize);
 
-cmd_priv_t*       cmd_get_priv(void);
+void           BQueueDelete(BQueueHandle_t handle);
 
-vcmd_mgr_t*       cmd_get_mgr(uint32_t mgrID);
+uint32_t       BQueueSize(BQueueHandle_t handle);
 
-cmd_session_t*    cmd_get_session(uint32_t sessionID);
+uint32_t       BQueueCount(BQueueHandle_t handle);
 
-cmd_session_t*    cmd_get_idle_session();
+uint32_t       BQueueItemSize(BQueueHandle_t handle);
 
-struct proc_obj*  cmd_get_proc(uint32_t sessionID);
+void*          BQueueAcquire(BQueueHandle_t handle);
 
-cmdMsg_t*         cmd_dequeue_cmdMsg(void);
+int32_t        BQueueRelease(BQueueHandle_t handle, void* item);
 
-cmdMsg_t*         cmd_acquire_cmdMsg(void);
+void*          BQueueDequeue(BQueueHandle_t handle);
 
-int32_t           cmd_release_cmdMsg(cmdMsg_t* cmdMsg);
+int32_t        BQueueQueue(BQueueHandle_t handle, void* item);
 
-int32_t           cmd_queue_cmdMsg(cmdMsg_t* cmdMsg);
+int32_t        BQueueCancel(BQueueHandle_t handle, void* item);
 
-int32_t           cmd_cancel_cmdMsg(cmdMsg_t* cmdMsg);
+void*          BQueueAcquireFromISR(BQueueHandle_t handle);
 
-int32_t           cmd_proc_cmdMsg(cmdMsg_t *cmdMsg);
+int32_t        BQueueReleaseFromISR(BQueueHandle_t handle, void* item);
 
+void*          BQueueDequeueFromISR(BQueueHandle_t handle);
 
+int32_t        BQueueQueueFromISR(BQueueHandle_t handle, void* item);
 
+int32_t        BQueueCancelFromISR(BQueueHandle_t handle, void* item);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /*_CMD_PRIVATE_H_*/
+#endif /*_BUFFER_QUEUE_H_*/

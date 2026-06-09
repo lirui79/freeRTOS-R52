@@ -38,7 +38,7 @@ struct proc_obj;
 
 //session
 typedef struct {
-    uint32_t               sessionID;
+    uint32_t               sessionID;// r52id + session_idx
     uint32_t               seqRNum;// sequence number, from 0 to 0xFFFFFFFF
     uint32_t               seqSNum;// sequence number, from 0 to 0xFFFFFFFF
     uint32_t               status;
@@ -46,13 +46,15 @@ typedef struct {
     struct proc_obj       *proc;
 } cmd_session_t;
 
-int32_t        cmd_session_init(cmd_session_t *session, struct proc_obj *proc);
+int32_t        cmd_session_init(cmd_session_t *session, struct proc_obj *proc, uint32_t sessionID);
 
 int32_t        cmd_session_check(cmd_session_t *session, cmdMsg_t *cmdMsg);
 
 int32_t        cmd_session_system(cmd_session_t *session, cmdMsg_t *cmdMsg);
 
 int32_t        cmd_session_vcodec(cmd_session_t *session, cmdMsg_t *cmdMsg);
+
+int32_t        cmd_session_send(cmd_session_t *session, cmdMsg_t *cmdMsg);
 
 
 #ifdef __cplusplus
