@@ -16,7 +16,7 @@ add_library(freertos_mailbox STATIC)
 
 target_sources(freertos_mailbox PRIVATE
     cmd.c
-    cmd_priv.c
+    cmd_mgr.c
     cmd_session.c
 )
 

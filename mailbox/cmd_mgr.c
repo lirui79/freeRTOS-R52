@@ -11,58 +11,58 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                      include command private source                          **
+**                      include command manager source                          **
 *********************************************************************************/
 
 #include "cmd.h"
 #include "crc32.h"
-#include "cmd_priv.h"
+#include "cmd_mgr.h"
 #include "cmd_session.h"
 #include "vcx_vcmd_priv.h"
 
 
 
-static cmd_priv_t g_cmd_priv;
+static cmd_mgr_t g_cmd_mgr;
 
 
 
-int             cmd_init_priv(cmd_priv_t *priv) {
+int             cmd_init_mgr(cmd_mgr_t *mgr) {
     int32_t i = 0;
     uint32_t sessionID = 0; // session ID from 0
 
-    priv->r52coreID = 0;// r52 core ID  from 0
-    priv->vtb_size  = CMD_SESSION_MAX; // r52 core number
-    sessionID = ((priv->r52coreID << 16) & 0xFFFF0000);
-    for (i = 0; i < priv->vtb_size; ++i) {
-        cmd_session_init(&priv->vtb[i], &priv->ptb[i], sessionID + i);
+    mgr->r52coreID = 0;// r52 core ID  from 0
+    mgr->vtb_size  = CMD_SESSION_MAX; // r52 core number
+    sessionID = ((mgr->r52coreID << 16) & 0xFFFF0000);
+    for (i = 0; i < mgr->vtb_size; ++i) {
+        cmd_session_init(&mgr->vtb[i], &mgr->ptb[i], sessionID + i);
     }
 
     for (i = 0; i < VCMD_MGR_ID_MAX; ++i) {
-        priv->mtb[i] = NULL;
+        mgr->mtb[i] = NULL;
     }
-    priv->cmd_queue = BQueueCreate(1024, CMD_MSG_MAX_SIZE);
+    mgr->cmd_queue = BQueueCreate(1024, CMD_MSG_MAX_SIZE);
     return 0;
 }
 
-vcmd_mgr_t*    cmd_get_mgr(uint32_t mgrID) {
+vcmd_mgr_t*    cmd_get_vcmd_mgr(uint32_t mgrID) {
     if (mgrID >= VCMD_MGR_ID_MAX) {
         return NULL;
     }
-    return cmd_get_priv()->mtb[mgrID];
+    return cmd_get_mgr()->mtb[mgrID];
 }
 
 cmd_session_t*    cmd_get_session(uint32_t sessionID) {
     if (sessionID >= CMD_SESSION_MAX) {
         return NULL;
     }
-    return &cmd_get_priv()->vtb[sessionID];
+    return &cmd_get_mgr()->vtb[sessionID];
 }
 
 cmd_session_t*    cmd_get_idle_session() {
-    cmd_priv_t* priv = cmd_get_priv();
-    for (uint32_t i = 0; i < priv->vtb_size; ++i) {
-        if (priv->vtb[i].status == CMD_SESSION_STATUS_IDLE) {
-            return &priv->vtb[i];
+    cmd_mgr_t* mgr = cmd_get_mgr();
+    for (uint32_t i = 0; i < mgr->vtb_size; ++i) {
+        if (mgr->vtb[i].status == CMD_SESSION_STATUS_IDLE) {
+            return &mgr->vtb[i];
         }
     }
 
@@ -73,33 +73,33 @@ struct proc_obj * cmd_get_proc(uint32_t sessionID) {
     if (sessionID >= CMD_SESSION_MAX) {
         return NULL;
     }
-    return &cmd_get_priv()->ptb[sessionID];   
+    return &cmd_get_mgr()->ptb[sessionID];   
 }
 
 struct proc_obj * cmd_get_proc(uint32_t sessionID);
 
-cmd_priv_t *cmd_get_priv(void) {
-    return &g_cmd_priv;
+cmd_mgr_t *cmd_get_mgr(void) {
+    return &g_cmd_mgr;
 }
 
 cmdMsg_t*         cmd_dequeue_cmdMsg(void) {
-    return (cmdMsg_t *)BQueueDequeue(cmd_get_priv()->cmd_queue);
+    return (cmdMsg_t *)BQueueDequeue(cmd_get_mgr()->cmd_queue);
 }
 
 cmdMsg_t*         cmd_acquire_cmdMsg(void) {
-    return (cmdMsg_t *)BQueueAcquire(cmd_get_priv()->cmd_queue);
+    return (cmdMsg_t *)BQueueAcquire(cmd_get_mgr()->cmd_queue);
 }
 
 int32_t           cmd_release_cmdMsg(cmdMsg_t* cmdMsg) {
-    return   BQueueRelease(cmd_get_priv()->cmd_queue, cmdMsg);
+    return   BQueueRelease(cmd_get_mgr()->cmd_queue, cmdMsg);
 }
 
 int32_t           cmd_queue_cmdMsg(cmdMsg_t* cmdMsg) {
-    return   BQueueQueue(cmd_get_priv()->cmd_queue, cmdMsg);
+    return   BQueueQueue(cmd_get_mgr()->cmd_queue, cmdMsg);
 }
 
 int32_t           cmd_cancel_cmdMsg(cmdMsg_t* cmdMsg) {
-    return   BQueueCancel(cmd_get_priv()->cmd_queue, cmdMsg);
+    return   BQueueCancel(cmd_get_mgr()->cmd_queue, cmdMsg);
 }
 
 static uint32_t cmd_check(cmdMsg_t *cmdMsg, cmd_session_t **session)
@@ -136,7 +136,7 @@ static uint32_t cmd_check(cmdMsg_t *cmdMsg, cmd_session_t **session)
 
     r52ID  = ((cmdMsg->sessionID & 0xFFFF0000) >> 16);
     sesID  = (cmdMsg->sessionID & 0xFFFF);
-    if (r52ID != cmd_get_priv()->r52coreID) {
+    if (r52ID != cmd_get_mgr()->r52coreID) {
         retCode = CMD_ERR_INVALID_SESSIONID;
         goto RETURN_ERROR;
     }

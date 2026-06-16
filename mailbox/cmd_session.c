@@ -15,7 +15,7 @@
 *********************************************************************************/
 
 #include "cmd.h"
-#include "cmd_priv.h"
+#include "cmd_mgr.h"
 #include "cmd_session.h"
 #include "vcx_vcmd_priv.h"
 #include "vcx_cmdbuf_obj.h"
@@ -165,7 +165,7 @@ static int32_t          vcodec_run_cmdbuf(cmd_session_t *session, cmdMsg_t *cmdM
     vcmd_mgr_t *vcmd_mgr = NULL;
     cmdReqRunCmdBuf_Body_t *cmdBody = (cmdReqRunCmdBuf_Body_t *)cmdMsg->data;
     int32_t retCode = CMD_ERR_SUCCESS;
-    vcmd_mgr = cmd_get_mgr(cmdBody->vcmdmgr_id);
+    vcmd_mgr = cmd_get_vcmd_mgr(cmdBody->vcmdmgr_id);
     if (vcmd_mgr == NULL) {
         cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
         cmdRspRunCmdBuf_Body_t *cmdBody1 = (cmdRspRunCmdBuf_Body_t *)cmdMsg1->data;

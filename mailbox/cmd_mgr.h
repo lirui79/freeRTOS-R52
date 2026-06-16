@@ -11,11 +11,11 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                      include command private header                          **
+**                      include command manager header                          **
 *********************************************************************************/
 
-#ifndef _CMD_PRIVATE_H_
-#define _CMD_PRIVATE_H_
+#ifndef _CMD_MANAGER_H_
+#define _CMD_MANAGER_H_
 
 #include <stdint.h>
 #include <stddef.h>
@@ -37,14 +37,14 @@ typedef struct {
     struct proc_obj    ptb[CMD_SESSION_MAX];// process table
     vcmd_mgr_t*        mtb[VCMD_MGR_ID_MAX];	// vcmd manager  0-vcmd mgr enc, 1- vcmd mgr dec
     BQueueHandle_t     cmd_queue; // command queue
-} cmd_priv_t;
+} cmd_mgr_t;
 
 
-int               cmd_init_priv(cmd_priv_t *priv);
+int               cmd_init_mgr(cmd_mgr_t *mgr);
 
-cmd_priv_t*       cmd_get_priv(void);
+cmd_mgr_t*       cmd_get_mgr(void);
 
-vcmd_mgr_t*       cmd_get_mgr(uint32_t mgrID);
+vcmd_mgr_t*       cmd_get_vcmd_mgr(uint32_t mgrID);
 
 cmd_session_t*    cmd_get_session(uint32_t sessionID);
 
@@ -72,4 +72,4 @@ int32_t           cmd_proc_cmdMsg(cmdMsg_t *cmdMsg);
 }
 #endif
 
-#endif /*_CMD_PRIVATE_H_*/
+#endif /*_CMD_MANAGER_H_*/

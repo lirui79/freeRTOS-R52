@@ -18,7 +18,7 @@
 #include "libc.h"
 #include "crc32.h"
 #include "vcodec.h"
-#include "cmd_priv.h"
+#include "cmd_mgr.h"
 #include <mhu_v3_x_private.h>
 #include <mhu_v3_x.h>
 #include <mhu.h>

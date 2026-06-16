@@ -16,7 +16,7 @@
 
 #include "cmd.h"
 #include "vcodec.h"
-#include "cmd_priv.h"
+#include "cmd_mgr.h"
 #include "vcx_cmdbuf_obj.h"
 
 #ifdef __FREERTOS__
@@ -61,7 +61,7 @@ vcodec_config_t *vcodec_get_config(void) {
 }
 
 int32_t          vcodec_init(cmdMsg_t *cmdMsg) {
-    cmd_init_priv(cmd_get_priv());
+    cmd_init_mgr(cmd_get_mgr());
 
     return 0;
 }
@@ -72,13 +72,13 @@ int32_t          vcodec_init_vcmd(cmdMsg_t *cmdMsg) {
 
 int32_t          vcx_vcmd_init(cmdMsg_t *cmdMsg) {
 //    vcmd_mgr_t *vcmd_mgr = NULL;
-    vce_vcmd_init(&cmd_get_priv()->mtb[VCMD_MGR_ID_ENC]);
-    vcd_vcmd_init(&cmd_get_priv()->mtb[VCMD_MGR_ID_DEC]);
+    vce_vcmd_init(&cmd_get_mgr()->mtb[VCMD_MGR_ID_ENC]);
+    vcd_vcmd_init(&cmd_get_mgr()->mtb[VCMD_MGR_ID_DEC]);
     return 0;
 }
 
 int32_t          vcx_vcmd_exit(cmdMsg_t *cmdMsg) {
-    vce_vcmd_exit(cmd_get_priv()->mtb[VCMD_MGR_ID_ENC]);
-    vcd_vcmd_exit(cmd_get_priv()->mtb[VCMD_MGR_ID_DEC]);
+    vce_vcmd_exit(cmd_get_mgr()->mtb[VCMD_MGR_ID_ENC]);
+    vcd_vcmd_exit(cmd_get_mgr()->mtb[VCMD_MGR_ID_DEC]);
     return 0;
 }
