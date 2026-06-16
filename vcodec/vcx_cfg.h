@@ -33,7 +33,7 @@ struct sub_mod_cfg {
 };
 
 /*for all vcmds, the config info should be listed here for subsequent use*/
-struct vcmd_config {
+struct vcmd_cfg {
 	unsigned long vcmd_base_addr;	//vcmd reg_base (bus address)
 	int vcmd_irq;
 	unsigned int sub_module_type; /*input vce=0,IM=1,vcd=2，jpege=3, jpegd=4*/
