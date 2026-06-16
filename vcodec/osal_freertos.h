@@ -1,0 +1,144 @@
+/********************************************************************************* 
+**       This software is confidential and proprietary and may be used          **
+**        only as expressly authorized by a licensing agreement from            **
+**                                                                              **
+**                            omnidimension                                     **
+**                                                                              **
+**                   (C) COPYRIGHT 2026 OMNIDIMENSION                           **
+**                            ALL RIGHTS RESERVED                               **
+**                                                                              **
+**                 The entire notice above must be reproduced                   **
+**                  on all copies and should not be removed.                    **
+**                                                                              **
+**********************************************************************************
+**                       include freeRTOS headers                               **
+*********************************************************************************/
+
+#ifndef _OSAL_FREE_RTOS_H_
+#define _OSAL_FREE_RTOS_H_
+
+
+#include "FreeRTOS.h"
+#include "printf.h"
+#include "task.h"
+#include "atomic.h"
+#include "semphr.h"
+#include "timers.h"
+#include "libc.h"
+#include <stdio.h>
+#include <stddef.h>
+
+#ifndef NULL
+#ifdef __cplusplus
+#define NULL 0
+#else
+#define NULL ((void *)0)
+#endif
+#endif
+
+
+#define EBUSY       16
+#define EINVAL      22  //EINVAL‌ 是 Linux 内核和用户空间中标准的错误码，代表 ‌“Invalid argument”（无效参数）‌。
+
+#define ERESTARTSYS     512  // 有信号处理函数时重启，否则转为 EINTR
+#define ERESTARTNOINTR  513  // 无论是否有信号，都强制重启（不转为 EINTR）
+#define ERESTART_RESTARTBLOCK 514 // 需要修改参数后重启（如 nanosleep）
+#define ERESTARTNOHAND  515  // 无信号处理函数时重启，否则转为 EINTR
+
+/**
+ * \defgroup base_type Numeric Data Types
+ *
+ * \brief This section provides the definitions of numeric data types.
+ *
+ * @{
+ */
+/** \brief Signed 8-bit integer. */
+typedef int8_t i8;
+/** \brief Unsigned 8-bit integer. */
+typedef uint8_t u8;
+/** \brief Signed 16-bit integer. */
+typedef int16_t i16;
+/** \brief Unsigned 16-bit integer. */
+typedef uint16_t u16;
+/** \brief Signed 32-bit integer. */
+typedef int32_t i32;
+/** \brief Unsigned 32-bit integer. */
+typedef uint32_t u32;
+/** \brief Signed 64-bit integer. */
+typedef int64_t i64;
+/** \brief Unsigned 64-bit integer. */
+typedef uint64_t u64;
+
+/** \brief Buffer address. */
+typedef u64 ptr_t;
+
+/**@}*/
+
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+#define PDEBUG(fmt, args...) printf(__FILE__ ":%lu: " fmt, __LINE__, ##args)
+//#define PDEBUG(fmt, args...)           /* not debugging: nothing */
+
+#define vmalloc  pvPortMalloc
+#define vfree    vPortFree
+
+#define __iomem
+
+#define container_of(ptr, type, member) ({              \
+    const typeof( ((type *)0)->member ) *__mptr = (ptr); \
+    (type *)( (char *)__mptr - offsetof(type, member) ); })
+
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+
+//#define readl(reg)            (*((volatile uint32_t *)(reg)))
+//#define writel(val, reg)	do { *((volatile uint32_t *)reg) = val; } while (0)
+ // 核心：ioread32
+static inline uint32_t ioread32(const volatile uint32_t *addr)
+{
+    return *addr;
+}
+
+// 向 32 位寄存器写入值（ARM R52 专用）
+static inline void iowrite32(uint32_t value, volatile uint32_t *addr)
+{
+    *addr = value;
+}
+
+/* mutex */
+typedef   UBaseType_t  spinlock_t;
+#define   spin_lock_init(x) do {*(x) = pdFALSE;} while(0)
+#define   spin_lock(x)  do { *(x) = 0; taskENTER_CRITICAL();} while(0)
+#define   spin_unlock(x)  do { *(x) = 0; taskEXIT_CRITICAL();} while(0)
+#define   spin_lock_irqsave(x, flag)   do { *(x) = 0; flag = taskENTER_CRITICAL_FROM_ISR();} while(0)
+#define   spin_unlock_irqrestore(x, flag) do { *(x) = 0; taskEXIT_CRITICAL_FROM_ISR(flag);} while(0)
+
+/*
+typedef unsigned int spinlock_t;
+#define   spin_lock_init(x) (*(x) = 0)
+#define   spin_lock(x)  do { *(x) = 0 ;} while(0)
+#define   spin_unlock(x)  do { *(x) = 0 ;} while(0)
+#define   spin_lock_irqsave(x, flag)  do { flag ;} while(0)
+#define   spin_unlock_irqrestore(x, flag) do { flag ;} while(0)
+*/
+
+/* interrupt wakeup */
+/*
+typedef unsigned int wait_queue_head_t;
+#define   init_waitqueue_head(x)  (*(x) = 0)
+#define   wake_up_interruptible_all(x) (*(x) = 0)
+#define   wait_event_interruptible(x, cond) ((x) = 0,cond,0x00)
+*/
+
+/* xtimer */
+
+#ifdef __cplusplus
+}
+#endif
+
+
+#endif /* _OSAL_FREE_RTOS_H_ */
