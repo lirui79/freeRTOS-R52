@@ -14,6 +14,7 @@
 **                         *.c vcd vcmd source code                             **
 *********************************************************************************/
 
+#include "cmd_mgr.h"
 #include "vcd_vcmd_cfg.h"
 #include "vcx_vcmd.h"
 #include "vcx_vcmd_priv.h"
@@ -528,13 +529,13 @@ static void read_main_module_all_registers(vcmd_mgr_t *vcmd_mgr)
 	int ret;
 	struct exchange_parameter param[MAX_SUBSYS_NUM];
 	u16 done_id = 0;
-	struct proc_obj *po;
 	u32 i, irq;
 	struct hantrovcmd_dev *dev;
 	struct vcmd_module_mgr *module;
 	u32 *main_regs_va;
+	cmd_session_t *cmd_session = NULL;
 
-	po = vcmd_mgr->init_po;
+	cmd_session = cmd_get_session(0x0);
 
 	for (i = 0; i < vcmd_mgr->subsys_num; i++) {
 		dev = &vcmd_mgr->dev_ctx[i];
@@ -548,9 +549,9 @@ static void read_main_module_all_registers(vcmd_mgr_t *vcmd_mgr)
 		EXCH_S_BIT(param[i].input_mask, EXCH_END_CMD_BIT);
 		module = &vcmd_mgr->module_mgr[param[i].module_type];
 
-		ret = reserve_cmdbuf(vcmd_mgr, po, &param[i]);
+		ret = reserve_cmdbuf(vcmd_mgr, cmd_session, &param[i]);
 		create_read_all_registers_cmdbuf(vcmd_mgr, &param[i]);
-		link_and_run_cmdbuf(vcmd_mgr, po, &param[i]);
+		link_and_run_cmdbuf(vcmd_mgr, cmd_session, &param[i]);
 	}
 
 	/* make sure vcmd can complete job, and clear irq
@@ -566,7 +567,7 @@ static void read_main_module_all_registers(vcmd_mgr_t *vcmd_mgr)
 			hantrovcmd_isr(irq, vcmd_mgr);
 		}
 
-		wait_cmdbuf_ready(vcmd_mgr, po, param[i].cmdbuf_id, &done_id);
+		vcmd_wait_cmdbuf_ready(vcmd_mgr, param[i].cmdbuf_id, &done_id);
 		main_regs_va = dev->reg_mem_va +
 				dev->subsys_info->reg_off[SUB_MOD_MAIN] / 4 + 0;
 		vcmd_klog(LOGLVL_CONFIG, "main module register 0:0x%x\n",
@@ -580,8 +581,7 @@ static void read_main_module_all_registers(vcmd_mgr_t *vcmd_mgr)
 		vcmd_klog(LOGLVL_CONFIG, "main module register 309:0x%x\n",
 			*(main_regs_va + 309));
 
-		release_cmdbuf(vcmd_mgr, po, param[i].cmdbuf_id);
-
+		vcmd_release_cmdbuf(vcmd_mgr, param[i].cmdbuf_id);
 	}
 }
 
@@ -659,6 +659,10 @@ int vcd_vcmd_init(vcmd_mgr_t **_vcmd_mgr)
 	if (result)
 		goto err1;
 
+	vcmd_mgr->job_waitq = xSemaphoreCreateBinary();
+	spin_lock_init(&vcmd_mgr->job_lock);
+	init_bi_list(&vcmd_mgr->job_done_list);
+
 	dev_ctx = vmalloc(sizeof(struct hantrovcmd_dev) * vcmd_mgr->subsys_num);
 	if (!dev_ctx)
 		goto err1;
@@ -666,12 +670,6 @@ int vcd_vcmd_init(vcmd_mgr_t **_vcmd_mgr)
 
 	vcmd_mgr->dev_ctx = dev_ctx;
 	dev_ctx_init(vcmd_mgr);
-
-//	sema_init(&vcmd_mgr->isr_polling_sema, 1);
-
-	vcmd_mgr->init_po = create_process_object();
-	if (!vcmd_mgr->init_po)
-		goto err1;
 
 	result = vcmd_reserve_IO(vcmd_mgr);
 	if (result < 0)
@@ -703,7 +701,6 @@ int vcd_vcmd_init(vcmd_mgr_t **_vcmd_mgr)
 
 	vcmd_init_objs(vcmd_mgr);
 	vcmd_init_nodes(vcmd_mgr);
-	vcmd_init_free_obj_list(vcmd_mgr);
 
 	/* create vcmd kthread, which need to be woken up */
 	_vcmd_kthread_create(vcmd_mgr);
@@ -723,8 +720,6 @@ int vcd_vcmd_init(vcmd_mgr_t **_vcmd_mgr)
 err:
 	vcmd_release_IO(vcmd_mgr);
 err1:
-	free_process_object(vcmd_mgr->init_po);
-
 	if (vcmd_mgr->dev_ctx)
 		vfree(vcmd_mgr->dev_ctx);
 	if (vcmd_mgr)
@@ -774,7 +769,10 @@ void vcd_vcmd_exit(vcmd_mgr_t *vcmd_mgr)
 	_vcmd_free_mem(vcmd_mgr, &vcmd_mgr->mem_regs);
 #endif*/
 
-	free_process_object(vcmd_mgr->init_po);
+    if (vcmd_mgr->job_waitq)
+		vSemaphoreDelete(vcmd_mgr->job_waitq);
+	vcmd_mgr->job_waitq = NULL;
+
 	vfree(vcmd_mgr);
 	vcmd_klog(LOGLVL_FLOW, "module removed\n");
 }

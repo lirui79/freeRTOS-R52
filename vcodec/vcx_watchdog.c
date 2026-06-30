@@ -317,7 +317,7 @@ void _vcmd_watchdog_start(struct hantrovcmd_dev *dev, int irq)
 		// 3. 关键步骤：检查是否需要切换任务
 		// 如果 Timer Service Task 的优先级高于当前被中断的任务，
 		// xHigherPriorityTaskWoken 将被设置为 pdTRUE
-	//    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	    portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
     dev->watchdog_active = 1;
 }
@@ -336,7 +336,7 @@ void _vcmd_watchdog_stop(struct hantrovcmd_dev *dev, int irq)
 		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 // 无效信号：立即停止定时器，防止回调执行
 		xTimerStopFromISR(dev->watchdog_timer, &xHigherPriorityTaskWoken);
-	//  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	    portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 
 	dev->watchdog_active = 0;
@@ -358,7 +358,7 @@ static unsigned int _vcmd_watchdog_ChangePeriod(struct hantrovcmd_dev *dev, unsi
 		}
 
 		// 3. 【关键】如果唤醒了高优先级任务，执行上下文切换
-		//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 	return 0;
 }

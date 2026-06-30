@@ -25,6 +25,7 @@
 #include "semphr.h"
 #include "timers.h"
 #include "libc.h"
+#include "spinlock.h"
 #include <stdio.h>
 #include <stddef.h>
 
@@ -109,22 +110,6 @@ static inline void iowrite32(uint32_t value, volatile uint32_t *addr)
     *addr = value;
 }
 
-/* mutex */
-typedef   UBaseType_t  spinlock_t;
-#define   spin_lock_init(x) do {*(x) = pdFALSE;} while(0)
-#define   spin_lock(x)  do { *(x) = 0; taskENTER_CRITICAL();} while(0)
-#define   spin_unlock(x)  do { *(x) = 0; taskEXIT_CRITICAL();} while(0)
-#define   spin_lock_irqsave(x, flag)   do { *(x) = 0; flag = taskENTER_CRITICAL_FROM_ISR();} while(0)
-#define   spin_unlock_irqrestore(x, flag) do { *(x) = 0; taskEXIT_CRITICAL_FROM_ISR(flag);} while(0)
-
-/*
-typedef unsigned int spinlock_t;
-#define   spin_lock_init(x) (*(x) = 0)
-#define   spin_lock(x)  do { *(x) = 0 ;} while(0)
-#define   spin_unlock(x)  do { *(x) = 0 ;} while(0)
-#define   spin_lock_irqsave(x, flag)  do { flag ;} while(0)
-#define   spin_unlock_irqrestore(x, flag) do { flag ;} while(0)
-*/
 
 /* interrupt wakeup */
 /*

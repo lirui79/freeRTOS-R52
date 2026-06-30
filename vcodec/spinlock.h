@@ -11,55 +11,42 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                      include command session header                          **
+**                       include spinlock_t headers                             **
 *********************************************************************************/
 
-#ifndef _COMMAND_SESSION_H_
-#define _COMMAND_SESSION_H_
+#ifndef _SPIN_LOCK_T_H_
+#define _SPIN_LOCK_T_H_
 
-
-#include "cmdef.h"
-#include "spinlock.h"
+#include "FreeRTOS.h"
+#include "task.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define CMD_SESSION_MAX  32
-
-typedef enum {
-    CMD_SESSION_STATUS_IDLE = 0,
-    CMD_SESSION_STATUS_RUN,
-    CMD_SESSION_STATUS_EXIT,
-    CMD_SESSION_STATUS_STOP
-} cmd_session_status_t;
 
 
 
-//session
-typedef struct {
-    uint64_t               procObj;
-    uint32_t               sessionID;// r52id + session_idx
-    uint32_t               seqRNum;// sequence number, from 0 to 0xFFFFFFFF
-    uint32_t               seqSNum;// sequence number, from 0 to 0xFFFFFFFF
-    uint32_t               status;
-    uint32_t               total_workload;
-    spinlock_t             spinlock;
-} cmd_session_t;
+/* mutex */
+typedef   UBaseType_t  spinlock_t;
+#define   spin_lock_init(x) do {*(x) = pdFALSE;} while(0)
+#define   spin_lock(x)  do { *(x) = 0; taskENTER_CRITICAL();} while(0)
+#define   spin_unlock(x)  do { *(x) = 0; taskEXIT_CRITICAL();} while(0)
+#define   spin_lock_irqsave(x, flag)   do { *(x) = 0; flag = taskENTER_CRITICAL_FROM_ISR();} while(0)
+#define   spin_unlock_irqrestore(x, flag) do { *(x) = 0; taskEXIT_CRITICAL_FROM_ISR(flag);} while(0)
 
-int32_t        cmd_session_init(cmd_session_t *session, uint32_t sessionID);
-
-int32_t        cmd_session_check(cmd_session_t *session, cmdMsg_t *cmdMsg);
-
-int32_t        cmd_session_system(cmd_session_t *session, cmdMsg_t *cmdMsg);
-
-int32_t        cmd_session_vcodec(cmd_session_t *session, cmdMsg_t *cmdMsg);
-
-int32_t        cmd_session_send(cmd_session_t *session, cmdMsg_t *cmdMsg);
-
+/*
+typedef unsigned int spinlock_t;
+#define   spin_lock_init(x) (*(x) = 0)
+#define   spin_lock(x)  do { *(x) = 0 ;} while(0)
+#define   spin_unlock(x)  do { *(x) = 0 ;} while(0)
+#define   spin_lock_irqsave(x, flag)  do { flag ;} while(0)
+#define   spin_unlock_irqrestore(x, flag) do { flag ;} while(0)
+*/
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /*_COMMAND_SESSION_H_*/
+
+#endif /* _SPIN_LOCK_T_H_ */

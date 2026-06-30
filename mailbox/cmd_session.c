@@ -21,14 +21,13 @@
 #include "vcx_cmdbuf_obj.h"
 
 
-int32_t cmd_session_init(cmd_session_t *session, struct proc_obj *proc, uint32_t sessionID) {
-    session->proc      = init_process_object(proc);
-    proc->session      = session;
+int32_t cmd_session_init(cmd_session_t *session, uint32_t sessionID) {
     session->sessionID = sessionID;
     session->seqRNum   = 0x00000000;
     session->seqSNum   = 0x00000000;
     session->status    = CMD_SESSION_STATUS_IDLE;
     session->procObj   = 0x00000000;
+    spin_lock_init(&session->spinlock);
     return 0;
 }
 
@@ -56,92 +55,69 @@ static int32_t cmd_system_open_session(cmd_session_t *session, cmdMsg_t *cmdMsg)
     cmd_session_t *cmd_session = cmd_get_idle_session();
     cmdReqOpenSession_Body_t *cmdBody = (cmdReqOpenSession_Body_t *)cmdMsg->data;
     int32_t retCode = CMD_ERR_SUCCESS;
+    cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
+    cmdRspOpenSession_Body_t *cmdBody1 = (cmdRspOpenSession_Body_t *)cmdMsg1->data;
+    cmd_init(cmdMsg1);
+    cmdMsg1->cmdType     = CMD_RSP_OPEN_SESSION;
+    cmdMsg1->sessionID   = cmdMsg->sessionID;
+    cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspOpenSession_Body_t);
+    cmdMsg1->timeStamp   = cmdMsg->timeStamp;
+    cmdMsg1->seqNum      = cmdMsg->seqNum;
+
+    cmdBody1->ackNum     = cmdMsg->seqNum;
+    cmdBody1->procObj    = cmdBody->procObj;
+    cmdBody1->timeStamp  = cmdMsg->timeStamp;
     if (cmd_session == NULL) {
-        cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
-        cmdRspOpenSession_Body_t *cmdBody1 = (cmdRspOpenSession_Body_t *)cmdMsg1->data;
-        cmd_init(cmdMsg1);
-        retCode              = CMD_ERR_NO_SESSION_AVAILABLE;
-        cmdMsg1->cmdType     = CMD_RSP_OPEN_SESSION;
-        cmdMsg1->sessionID   = cmdMsg->sessionID;
-        cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspOpenSession_Body_t);
-        cmdMsg1->timeStamp   = cmdMsg->timeStamp;
-        cmdMsg1->seqNum      = cmdMsg->seqNum;
-        cmdBody1->ackNum     = cmdMsg->seqNum;
-        cmdBody1->code       = retCode;
+        retCode              = CMD_ERR_INVALID_SESSIONID;
         cmdBody1->sessionID  = 0xFFFFFFFF;
-        cmdBody1->procObj    = cmdBody->procObj;
-        cmdBody1->timeStamp  = cmdMsg->timeStamp;
-        retCode = cmd_session_send(session, cmdMsg1);
-        return CMD_ERR_NO_SESSION_AVAILABLE;
-    }
-    cmd_session->procObj = cmdBody->procObj;
-    cmd_session->status  = CMD_SESSION_STATUS_RUN;
-    cmd_session->seqRNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
-    cmd_session->seqSNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
+    } else {
+        cmd_session->procObj = cmdBody->procObj;
+        cmd_session->status  = CMD_SESSION_STATUS_RUN;
+        if (cmd_session != session) {
+            cmd_session->seqRNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
+            cmd_session->seqSNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
+            cmd_session->total_workload = 0x00;
+        }
 
-    {
-        cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
-        cmdRspOpenSession_Body_t *cmdBody1 = (cmdRspOpenSession_Body_t *)cmdMsg1->data;
-        cmd_init(cmdMsg1);
-        cmdMsg1->cmdType     = CMD_RSP_OPEN_SESSION;
-        cmdMsg1->sessionID   = cmdMsg->sessionID;
-        cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspOpenSession_Body_t);
-        cmdMsg1->timeStamp   = cmdMsg->timeStamp;
-        cmdMsg1->seqNum      = cmdMsg->seqNum;
-        cmdBody1->ackNum     = cmdMsg->seqNum;
-        cmdBody1->code       = retCode;
+        retCode              = CMD_ERR_SUCCESS;
         cmdBody1->sessionID  = cmd_session->sessionID;
-        cmdBody1->procObj    = cmdBody->procObj;
-        cmdBody1->timeStamp  = cmdMsg->timeStamp;
-        retCode = cmd_session_send(session, cmdMsg1);
     }
 
-    return retCode;
+    cmdBody1->code       = retCode;
+    return  cmd_session_send(session, cmdMsg1);
 }
 
 static int32_t cmd_system_close_session(cmd_session_t *session, cmdMsg_t *cmdMsg) {
     cmdReqCloseSession_Body_t *cmdBody = (cmdReqCloseSession_Body_t *)cmdMsg->data;
     cmd_session_t *cmd_session = cmd_get_session(cmdBody->sessionID);
     int32_t retCode = CMD_ERR_SUCCESS;
+    cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
+    cmdRspCloseSession_Body_t *cmdBody1 = (cmdRspCloseSession_Body_t *)cmdMsg1->data;
+    cmd_init(cmdMsg1);
+    cmdMsg1->cmdType     = CMD_RSP_CLOSE_SESSION;
+    cmdMsg1->sessionID   = cmdMsg->sessionID;
+    cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspCloseSession_Body_t);
+    cmdMsg1->timeStamp   = cmdMsg->timeStamp;
+    cmdMsg1->seqNum      = cmdMsg->seqNum;
+
+    cmdBody1->ackNum     = cmdMsg->seqNum;
     if (cmd_session == NULL) {
-        cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
-        cmdRspCloseSession_Body_t *cmdBody1 = (cmdRspCloseSession_Body_t *)cmdMsg1->data;
         retCode              = CMD_ERR_INVALID_SESSIONID;
-        cmd_init(cmdMsg1);
-        cmdMsg1->cmdType     = CMD_RSP_CLOSE_SESSION;
-        cmdMsg1->sessionID   = cmdMsg->sessionID;
-        cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspCloseSession_Body_t);
-        cmdMsg1->timeStamp   = cmdMsg->timeStamp;
-        cmdMsg1->seqNum      = cmdMsg->seqNum;
-        cmdBody1->ackNum     = cmdMsg->seqNum;
-        cmdBody1->code       = retCode;
         cmdBody1->sessionID  = cmdBody->sessionID;
-        cmdBody1->procObj    = cmdBody->procObj;
-        retCode = cmd_session_send(session, cmdMsg1);
-        return CMD_ERR_INVALID_SESSIONID;
-    }
-    cmd_session->procObj = 0x00;
-    cmd_session->status  = CMD_SESSION_STATUS_IDLE;
-    cmd_session->seqRNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
-    cmd_session->seqSNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
+    } else {
+        cmd_session->procObj = 0x00;
+        cmd_session->status  = CMD_SESSION_STATUS_IDLE;
+        cmd_session->seqRNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
+        cmd_session->seqSNum = 0x00;// sequence number, from 0 to 0xFFFFFFFF
+        cmd_session->total_workload = 0x00;
 
-    {
-        cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
-        cmdRspCloseSession_Body_t *cmdBody1 = (cmdRspCloseSession_Body_t *)cmdMsg1->data;
-        cmd_init(cmdMsg1);
-        cmdMsg1->cmdType     = CMD_RSP_CLOSE_SESSION;
-        cmdMsg1->sessionID   = cmdMsg->sessionID;
-        cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspCloseSession_Body_t);
-        cmdMsg1->timeStamp   = cmdMsg->timeStamp;
-        cmdMsg1->seqNum      = cmdMsg->seqNum;
-        cmdBody1->ackNum     = cmdMsg->seqNum;
-        cmdBody1->code       = retCode;
+        retCode              = CMD_ERR_SUCCESS;
         cmdBody1->sessionID  = cmd_session->sessionID;
-        cmdBody1->procObj    = cmdBody->procObj;
-        retCode = cmd_session_send(session, cmdMsg1);
     }
 
-    return retCode;
+    cmdBody1->code       = retCode;
+    cmdBody1->procObj    = cmdBody->procObj;
+    return cmd_session_send(session, cmdMsg1);
 }
 
 int32_t        cmd_session_system(cmd_session_t *session, cmdMsg_t *cmdMsg) {
@@ -165,50 +141,124 @@ static int32_t          vcodec_run_cmdbuf(cmd_session_t *session, cmdMsg_t *cmdM
     vcmd_mgr_t *vcmd_mgr = NULL;
     cmdReqRunCmdBuf_Body_t *cmdBody = (cmdReqRunCmdBuf_Body_t *)cmdMsg->data;
     int32_t retCode = CMD_ERR_SUCCESS;
+    cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
+    cmdRspRunCmdBuf_Body_t *cmdBody1 = (cmdRspRunCmdBuf_Body_t *)cmdMsg1->data;
+
     vcmd_mgr = cmd_get_vcmd_mgr(cmdBody->vcmdmgr_id);
+
+    cmd_init(cmdMsg1);
+    cmdMsg1->cmdType     = CMD_RSP_RUN_CMDBUF;
+    cmdMsg1->sessionID   = cmdMsg->sessionID;
+    cmdMsg1->timeStamp   = cmdMsg->timeStamp;
+    cmdMsg1->seqNum      = cmdMsg->seqNum;
+    cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspRunCmdBuf_Body_t);
+
+    cmdBody1->ackNum     = cmdMsg->seqNum;
     if (vcmd_mgr == NULL) {
-        cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
-        cmdRspRunCmdBuf_Body_t *cmdBody1 = (cmdRspRunCmdBuf_Body_t *)cmdMsg1->data;
-        cmd_init(cmdMsg1);
-        cmdMsg1->cmdType     = CMD_RSP_RUN_CMDBUF;
-        cmdMsg1->sessionID   = cmdMsg->sessionID;
-        cmdMsg1->timeStamp   = cmdMsg->timeStamp;
-        cmdMsg1->seqNum      = cmdMsg->seqNum;
-        cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspRunCmdBuf_Body_t);
-        cmdBody1->ackNum     = cmdMsg->seqNum;
-        cmdBody1->code       = CMD_ERR_INVALID_VCMDMGRID;
-        cmdBody1->vcmdmgr_id = cmdBody->vcmdmgr_id;
-        cmdBody1->cmdbuf_id  = cmdBody->cmdbuf_id;
-        cmdBody1->core_id    = cmdBody->core_id;
-        retCode = cmd_session_send(session, cmdMsg1);
-        return CMD_ERR_INVALID_VCMDMGRID;
+        retCode          = CMD_ERR_INVALID_VCMDMGRID;
+    } else {
+        if (cmdBody->procObj != session->procObj) {
+            retCode      = CMD_ERR_INVALID_PROCOBJ;
+        } else {
+            retCode      = vcmd_link_and_rum_cmdbuf(vcmd_mgr, session, cmdBody);
+        }
     }
 
-    retCode = vcmd_link_and_rum_cmdbuf(vcmd_mgr, cmdBody);
-    {//
-        cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
-        cmdRspRunCmdBuf_Body_t *cmdBody1 = (cmdRspRunCmdBuf_Body_t *)cmdMsg1->data;
-        cmd_init(cmdMsg1);
-        cmdMsg1->cmdType     = CMD_RSP_RUN_CMDBUF;
-        cmdMsg1->sessionID   = cmdMsg->sessionID;
-        cmdMsg1->timeStamp   = cmdMsg->timeStamp;
-        cmdMsg1->seqNum      = cmdMsg->seqNum;
-        cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspRunCmdBuf_Body_t);
-        cmdBody1->ackNum     = cmdMsg->seqNum;
-        cmdBody1->code       = retCode;
-        cmdBody1->vcmdmgr_id = cmdBody->vcmdmgr_id;
-        cmdBody1->cmdbuf_id  = cmdBody->cmdbuf_id;
-        cmdBody1->core_id    = cmdBody->core_id;
-        retCode = cmd_session_send(session, cmdMsg1);
+    cmdBody1->code       = retCode;
+    cmdBody1->vcmdmgr_id = cmdBody->vcmdmgr_id;
+    cmdBody1->cmdbuf_id  = cmdBody->cmdbuf_id;
+    cmdBody1->core_id    = cmdBody->core_id;
+    return  cmd_session_send(session, cmdMsg1);
+}
+
+static int32_t          vcodec_ctrl_cmdbuf(cmd_session_t *session, cmdMsg_t *cmdMsg){
+    vcmd_mgr_t *vcmd_mgr = NULL;
+    cmdReqCtlCmdBuf_Body_t *cmdBody = (cmdReqCtlCmdBuf_Body_t *)cmdMsg->data;
+    int32_t retCode = CMD_ERR_SUCCESS;
+    cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
+    cmdRspCtlCmdBuf_Body_t *cmdBody1 = (cmdRspCtlCmdBuf_Body_t *)cmdMsg1->data;
+
+    vcmd_mgr = cmd_get_vcmd_mgr(cmdBody->vcmdmgr_id);
+
+    cmd_init(cmdMsg1);
+    cmdMsg1->sessionID   = cmdMsg->sessionID;
+    cmdMsg1->timeStamp   = cmdMsg->timeStamp;
+    cmdMsg1->seqNum      = cmdMsg->seqNum;
+    cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspCtlCmdBuf_Body_t);
+
+    cmdBody1->ackNum     = cmdMsg->seqNum;
+    if (vcmd_mgr == NULL) {
+        retCode          = CMD_ERR_INVALID_VCMDMGRID;
+    } else {
+        if (cmdBody->procObj != session->procObj) {
+            retCode      = CMD_ERR_INVALID_PROCOBJ;
+        } else {
+            switch(cmdMsg->cmdType) {
+                case CMD_REQ_PUSH_SLICE_REG:
+                    cmdMsg1->cmdType     = CMD_RSP_PUSH_SLICE_REG;
+                    retCode      = vcmd_flush_slice_regs(vcmd_mgr, cmdBody->cmdbuf_id);
+                    break;
+                case CMD_REQ_POLLING_CMDBUF:
+                    cmdMsg1->cmdType     = CMD_RSP_POLLING_CMDBUF;
+                    retCode      = vcmd_polling_cmdbuf(vcmd_mgr, cmdBody->cmdbuf_id);
+                    break;
+                case CMD_REQ_ABORT_CMDBUF:
+                    cmdMsg1->cmdType     = CMD_RSP_ABORT_CMDBUF;
+                    retCode      = vcmd_abort_cmdbuf(vcmd_mgr, cmdBody->cmdbuf_id);
+                    break;
+                default :
+                    break;
+            }
+        }
     }
 
-    return retCode;
+    cmdBody1->code       = retCode;
+    return  cmd_session_send(session, cmdMsg1);
+}
+
+static int32_t          vcodec_drop_owner(cmd_session_t *session, cmdMsg_t *cmdMsg){
+    vcmd_mgr_t *vcmd_mgr = NULL;
+    cmdReqDropOwner_Body_t *cmdBody = (cmdReqDropOwner_Body_t *)cmdMsg->data;
+    int32_t retCode = CMD_ERR_SUCCESS;
+    cmdMsg_t *cmdMsg1 = cmd_dequeue_cmdMsg();
+    cmdRspDropOwner_Body_t *cmdBody1 = (cmdRspDropOwner_Body_t *)cmdMsg1->data;
+
+    vcmd_mgr = cmd_get_vcmd_mgr(cmdBody->vcmdmgr_id);
+
+    cmd_init(cmdMsg1);
+    cmdMsg1->cmdType     = CMD_RSP_DROP_OWNER;
+    cmdMsg1->sessionID   = cmdMsg->sessionID;
+    cmdMsg1->timeStamp   = cmdMsg->timeStamp;
+    cmdMsg1->seqNum      = cmdMsg->seqNum;
+    cmdMsg1->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdRspDropOwner_Body_t);
+
+    cmdBody1->ackNum     = cmdMsg->seqNum;
+    if (vcmd_mgr == NULL) {
+        retCode          = CMD_ERR_INVALID_VCMDMGRID;
+    } else {
+        if (cmdBody->procObj != session->procObj) {
+            retCode      = CMD_ERR_INVALID_PROCOBJ;
+        } else {
+            retCode      = vcmd_drop_owner(vcmd_mgr, session, cmdBody->ownerID, cmdBody1);
+        }
+    }
+
+    cmdBody1->code       = retCode;
+    return  cmd_session_send(session, cmdMsg1);
 }
 
 int32_t        cmd_session_vcodec(cmd_session_t *session, cmdMsg_t *cmdMsg) {
     switch (cmdMsg->cmdType) {
     case CMD_REQ_RUN_CMDBUF:
         return vcodec_run_cmdbuf(session, cmdMsg);
+        break;
+    case CMD_REQ_PUSH_SLICE_REG:
+    case CMD_REQ_POLLING_CMDBUF:
+    case CMD_REQ_ABORT_CMDBUF:
+        return vcodec_ctrl_cmdbuf(session, cmdMsg);
+        break;
+    case CMD_REQ_DROP_OWNER:
+        return vcodec_drop_owner(session, cmdMsg);
         break;
     default:
         break;
@@ -218,7 +268,6 @@ int32_t        cmd_session_vcodec(cmd_session_t *session, cmdMsg_t *cmdMsg) {
 
 int32_t        cmd_session_send(cmd_session_t *session, cmdMsg_t *cmdMsg) {
     cmdMsg->sessionID    = session->sessionID;
-//    cmdMsg->procObj      = session->procObj;
     cmdMsg->seqNum       = session->seqSNum++;
     cmdMsg->timeStamp    = 0x00000000;
     return cmd_send(cmdMsg);

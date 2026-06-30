@@ -42,7 +42,7 @@ static void process_abnormal_irq(vcmd_mgr_t *vcmd_mgr,
        if (intr_src & ENC_ABN_IRQ_MASK)
            process_vce_abn_irq(vcmd_mgr, dev, obj);
 	}
-	if (dev->subsys_info->sub_module_type == VCMD_TYPE_ENCODER) {
+	if (dev->subsys_info->sub_module_type == VCMD_TYPE_DECODER) {
     /* abnormal interrupts source from VCD */
        if (intr_src & dev->vcd_abn_irq_mask)
            process_vcd_abn_irq(vcmd_mgr, dev, obj);
@@ -363,7 +363,7 @@ irqreturn_t hantrovcmd_isr(int irq, void *handler)
 		{
 			BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 			xSemaphoreGiveFromISR(dev->abort_waitq, &xHigherPriorityTaskWoken);
-			//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+			portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 		}
 
 		handled++;

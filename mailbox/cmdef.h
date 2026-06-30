@@ -17,8 +17,7 @@
 #ifndef _COMMAND_DEFINE_H_
 #define _COMMAND_DEFINE_H_
 
-#include <stdint.h>
-#include <stddef.h>
+#include "cmd_inc.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,6 +46,7 @@ enum cmdType {
     CMD_RSP_GET_LOGCFG             = 0x09,
     CMD_REQ_GET_SYSTATE            = 0x0A,
     CMD_RSP_GET_SYSTATE            = 0x0B,
+
     CMD_REQ_OPEN_SESSION           = 0x0C,
     CMD_RSP_OPEN_SESSION           = 0x0D,
     CMD_REQ_CLOSE_SESSION          = 0x0E,
@@ -65,10 +65,15 @@ enum cmdType {
 // REQ + RSP
     CMD_REQ_RUN_CMDBUF             = 0x100,
     CMD_RSP_RUN_CMDBUF             = 0x101,
-    CMD_REQ_ABORT_CMDBUF           = 0x102,
-    CMD_RSP_ABORT_CMDBUF           = 0x103,
-    CMD_REQ_GET_VCMDSTATE          = 0x104,
-    CMD_RSP_GET_VCMDSTATE          = 0x105,
+    CMD_REQ_PUSH_SLICE_REG         = 0x102,
+    CMD_RSP_PUSH_SLICE_REG         = 0x103,
+    CMD_REQ_POLLING_CMDBUF         = 0x104,
+    CMD_RSP_POLLING_CMDBUF         = 0x105,
+    CMD_REQ_ABORT_CMDBUF           = 0x106,
+    CMD_RSP_ABORT_CMDBUF           = 0x107,
+    CMD_REQ_DROP_OWNER             = 0x108,
+    CMD_RSP_DROP_OWNER             = 0x109,
+
 
 // EVT
     CMD_EVT_REPORT_CMDBUF_READY    = 0x160,
@@ -98,25 +103,16 @@ typedef struct __attribute__((packed, aligned(8))) {
 #define CMD_MSG_FREE(pMsg) \
     vPortFree(pMsg)
 
-
-typedef struct __attribute__((packed, aligned(8))) {//CMD_EVT_REPORT_CMDERROR
-    uint32_t       code;// 0 - success, > 0 - fail
-    uint32_t       cmdType;// command type  enum cmdType
-    uint32_t       seqNum;// seqNum
-    uint32_t       sessionID;// session id
-    uint64_t       procObj;// process object id
-    uint64_t       timeStamp;// time stamp, default current time in ms
-} cmdEvtRepCmdError_Body_t;
-
-
+// system req + rsp
 typedef struct __attribute__((packed, aligned(8))) {//CMD_REQ_EXE_SYSCTL
     uint32_t       control;// 0 - hardware reset    1 - software reset
 } cmdReqSysctl_Body_t;
 
 
 typedef struct __attribute__((packed, aligned(8))) {//CMD_RSP_EXE_SYSCTL
-    uint32_t       ackNum;// seqNum
     uint32_t       code;// 0 - success, > 0 - fail
+    uint32_t       ackNum;// seqNum
+    uint64_t       timeStamp;// time stamp, default current time in ms
 } cmdRspSysctl_Body_t;
 
 
@@ -129,14 +125,15 @@ typedef struct __attribute__((packed, aligned(8))) {//CMD_RSP_OPEN_SESSION
     uint32_t       code;// 0 - success, > 0 - fail
     uint32_t       ackNum;// seqNum
     uint32_t       sessionID;// session id
+    uint32_t       reserve;//
     uint64_t       procObj;// process object id
     uint64_t       timeStamp;// time stamp, default current time in ms
 } cmdRspOpenSession_Body_t;
 
 
 typedef struct __attribute__((packed, aligned(8))) {//CMD_REQ_CLOSE_SESSION
+    uint64_t       procObj;// process object id
     uint32_t       sessionID;// session id
-    uint32_t       procObj;// process object id
 } cmdReqCloseSession_Body_t;
 
 
@@ -144,16 +141,29 @@ typedef struct __attribute__((packed, aligned(8))) {//CMD_RSP_CLOSE_SESSION
     uint32_t       code;// 0 - success, > 0 - fail
     uint32_t       ackNum;// seqNum
     uint32_t       sessionID;// session id
+    uint32_t       reserve;//
     uint64_t       procObj;// process object id
 } cmdRspCloseSession_Body_t;
 
+// system evt
+typedef struct __attribute__((packed, aligned(8))) {//CMD_EVT_REPORT_CMDERROR
+    uint32_t       code;// 0 - success, > 0 - fail
+    uint32_t       cmdType;// command type  enum cmdType
+    uint32_t       seqNum;// seqNum
+    uint32_t       sessionID;// session id
+    uint64_t       procObj;// process object id
+    uint64_t       timeStamp;// time stamp, default current time in ms
+} cmdEvtRepCmdError_Body_t;
 
 
 #define VCMD_MGR_ID_ENC  0
 #define VCMD_MGR_ID_DEC  1
 #define VCMD_MGR_ID_MAX  2
 
+// vcodec req + rsp
 typedef struct __attribute__((packed, aligned(8))) {//CMD_REQ_RUN_CMDBUF
+    uint64_t       procObj;// process object id
+    uint64_t       ownerID;// owner id
     uint64_t       interrupt_ctrl;
     uint32_t       vcmdmgr_id;
     uint16_t       module_type;
@@ -166,19 +176,47 @@ typedef struct __attribute__((packed, aligned(8))) {//CMD_REQ_RUN_CMDBUF
 
 
 typedef struct __attribute__((packed, aligned(8))) {//CMD_RSP_RUN_CMDBUF
-    uint32_t       ackNum;// seqNum
     uint32_t       code;// 0 - success, > 0 - fail
+    uint32_t       ackNum;// seqNum
     uint32_t       vcmdmgr_id;
     uint16_t       cmdbuf_id;
     uint16_t       core_id;
 } cmdRspRunCmdBuf_Body_t;
 
 
+typedef struct __attribute__((packed, aligned(8))) {//CMD_REQ_PUSH_SLICE_REG  CMD_REQ_POLLING_CMDBUF CMD_REQ_ABORT_CMDBUF
+    uint64_t       procObj;// process object id
+    uint32_t       vcmdmgr_id;
+    uint16_t       cmdbuf_id;  //CMD_REQ_PUSH_SLICE_REG CMD_REQ_ABORT_CMDBUF - cmdbuf_id ; CMD_REQ_POLLING_CMDBUF - core_id 0xFFFF - all core, other - core id
+} cmdReqCtlCmdBuf_Body_t;
 
 
+typedef struct __attribute__((packed, aligned(8))) {//CMD_RSP_PUSH_SLICE_REG  CMD_RSP_POLLING_CMDBUF  CMD_RSP_ABORT_CMDBUF
+    uint32_t       code;// 0 - success, > 0 - fail
+    uint32_t       ackNum;// seqNum
+} cmdRspCtlCmdBuf_Body_t;
+
+
+typedef struct __attribute__((packed, aligned(8))) {//CMD_REQ_DROP_OWNER
+    uint64_t       procObj;// process object id
+    uint64_t       ownerID;// owner id
+    uint32_t       vcmdmgr_id;
+} cmdReqDropOwner_Body_t;
+
+
+typedef struct __attribute__((packed, aligned(8))) {//CMD_RSP_DROP_OWNER
+    uint32_t       code;// 0 - success, > 0 - fail
+    uint32_t       ackNum;// seqNum
+    uint32_t       cmdbuf_num;//drop cmdbuf num
+} cmdRspDropOwner_Body_t;
+
+
+
+// vcodec evt
 typedef struct __attribute__((packed, aligned(8))) {//CMD_EVT_REPORT_CMDBUF_READY
     uint32_t       status;// 0 - success, > 0 - fail
     uint32_t       vcmdmgr_id;
+    uint64_t       procObj;// process object id
     uint16_t       cmdbuf_id;
 } cmdEvtRepCmdBufReady_Body_t;
 
@@ -196,7 +234,13 @@ enum cmdError {
     CMD_ERR_INVALID_SEQUENCEID     = 0x07,
     CMD_ERR_INVALID_VCMDMGRID      = 0x08,
     CMD_ERR_NO_SESSION_AVAILABLE   = 0x09,
-    CMD_ERR_INVALID_PARAM          = 0x0A,
+    CMD_ERR_INVALID_ACKNUM         = 0x0A,
+    CMD_ERR_INVALID_PROCOBJ        = 0x0B,
+    CMD_ERR_INVALID_CMDBUFID       = 0x0C,
+
+    CMD_ERR_INVALID_PARAM          = 0x10,
+
+    CMD_ERR_UNKNOWN                = 0xFFFFFFFF,
 };
 
 #ifdef __cplusplus
