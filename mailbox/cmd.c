@@ -19,9 +19,7 @@
 #include "crc32.h"
 #include "vcodec.h"
 #include "cmd_mgr.h"
-#include <mhu_v3_x_private.h>
-#include <mhu_v3_x.h>
-#include <mhu.h>
+
 
 
 void cmd_init(cmdMsg_t *cmdMsg) {
@@ -65,4 +63,15 @@ int32_t cmd_proc(void) {
     cmd_release_cmdMsg(cmdMsg);
     return 0;
 
+}
+
+int32_t cmd_wait(uint32_t mgrid) {
+    cmdMsg_t *cmdMsg = cmd_dequeue_cmdMsg();
+    if (cmdMsg == NULL) {
+        return -1;
+    }
+
+    cmd_wait_cmdMsg(cmdMsg, mgrid);
+    cmd_release_cmdMsg(cmdMsg);
+    return 0;
 }

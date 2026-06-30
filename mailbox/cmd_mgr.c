@@ -19,6 +19,7 @@
 #include "cmd_mgr.h"
 #include "cmd_session.h"
 #include "vcx_vcmd_priv.h"
+#include "vcx_cmdbuf_obj.h"
 
 
 
@@ -34,7 +35,7 @@ int             cmd_init_mgr(cmd_mgr_t *mgr) {
     mgr->vtb_size  = CMD_SESSION_MAX; // r52 core number
     sessionID = ((mgr->r52coreID << 16) & 0xFFFF0000);
     for (i = 0; i < mgr->vtb_size; ++i) {
-        cmd_session_init(&mgr->vtb[i], &mgr->ptb[i], sessionID + i);
+        cmd_session_init(&mgr->vtb[i], sessionID + i);
     }
 
     for (i = 0; i < VCMD_MGR_ID_MAX; ++i) {
@@ -68,15 +69,6 @@ cmd_session_t*    cmd_get_idle_session() {
 
     return NULL;
 }
-
-struct proc_obj * cmd_get_proc(uint32_t sessionID) {
-    if (sessionID >= CMD_SESSION_MAX) {
-        return NULL;
-    }
-    return &cmd_get_mgr()->ptb[sessionID];   
-}
-
-struct proc_obj * cmd_get_proc(uint32_t sessionID);
 
 cmd_mgr_t *cmd_get_mgr(void) {
     return &g_cmd_mgr;
@@ -185,4 +177,34 @@ int32_t cmd_proc_cmdMsg(cmdMsg_t *cmdMsg) {
     }
 
     return cmd_session_vcodec(session, cmdMsg);
+}
+
+int32_t           cmd_wait_cmdMsg(cmdMsg_t *cmdMsg, uint32_t mgrid) {
+    vcmd_mgr_t *vcmd_mgr = NULL;
+	struct cmdbuf_obj *obj = NULL;
+    cmd_session_t *session = NULL;
+    cmdEvtRepCmdBufReady_Body_t *cmdBody = NULL;
+    int32_t retCode = CMD_ERR_SUCCESS;
+    uint16_t cmdbuf_id = ANY_CMDBUF_ID;
+    vcmd_mgr = cmd_get_vcmd_mgr(mgrid);
+    if (vcmd_wait_cmdbuf_ready(vcmd_mgr, cmdbuf_id, &cmdbuf_id) < 0) {
+        retCode = CMD_ERR_INVALID_PARAM;
+        return retCode;
+    };
+    obj = &vcmd_mgr->objs[cmdbuf_id];
+    session = obj->session;
+    cmd_init(cmdMsg);
+    cmdBody = (cmdEvtRepCmdBufReady_Body_t *)cmdMsg->data;
+    cmdMsg->cmdType     = CMD_EVT_REPORT_CMDBUF_READY;
+    cmdMsg->sessionID   = session->sessionID;
+    cmdMsg->timeStamp   = 0;
+    cmdMsg->cmdSize     = CMD_MSG_MIN_SIZE + sizeof(cmdEvtRepCmdBufReady_Body_t);
+    cmdBody->cmdbuf_id  = cmdbuf_id;
+    cmdBody->status     = 0;// 0 - success, > 0 - fail
+    cmdBody->vcmdmgr_id = mgrid;
+    cmdBody->procObj    = session->procObj;// process object id
+
+    cmd_session_send(session, cmdMsg);
+    vcmd_release_cmdbuf(vcmd_mgr, cmdbuf_id);
+    return 0;
 }

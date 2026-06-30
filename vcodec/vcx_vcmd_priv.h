@@ -176,35 +176,6 @@ enum ext_sw_reset {
 #define KT_ACT_AXI2TO1_EXCEPTION    ((u32)(0x1 << (3)))
 #define KT_ACT_HW_BUS_ERR           ((u32)(0x1 << (4)))
 
-/* ------------------------------------------------------
- *  single linked list
- *-------------------------------------------------------
- */
-typedef struct si_linked_node {
-	struct si_linked_node *next;
-	void *data;
-} si_linked_node;
-
-struct si_linked_list {
-	spinlock_t spinlock;
-	struct si_linked_node *head;
-	struct si_linked_node *tail;
-	struct si_linked_node nodes[SLOT_NUM_CMDBUF];
-};
-
-struct proc_obj {
-	u32 total_workload;
-	spinlock_t spinlock;
-    SemaphoreHandle_t resource_waitq;//	wait_queue_head_t resource_waitq;
-	SemaphoreHandle_t job_waitq;//wait_queue_head_t job_waitq;
-	u32 module_type;	/* correspond to filp, indicates subsys type */
-
-	spinlock_t job_lock;
-    cmd_session_t   *session;
-//	struct file *filp;
-	struct bi_list job_done_list;
-	u32 in_wait;		/* user is waiting for a specified cmdbuf run done */
-};
 
 struct noncache_mem {
 	u32 *va;
@@ -273,7 +244,9 @@ struct cmdbuf_obj {
 	/*file pointer occupying this obj.*/
 //	struct file *filp;
 	/* pointer of process object occupying this obj*/
-	struct proc_obj *po;
+	cmd_session_t   *session;//struct proc_obj *po;
+	/* pointer of the instance of process */
+	u64   owner;
 	//current status CMDBUF mmu mapping address.
 	ptr_t mmu_status_ba;
 	//current CMDBUF mmu mapping address.
@@ -421,9 +394,6 @@ typedef struct {
 	struct bi_list_node nodes[SLOT_NUM_CMDBUF];		//nodes for dev work-list
 	struct bi_list_node po_jobs[SLOT_NUM_CMDBUF];	//node for po job-list
 
-//	SemaphoreHandle_t free_obj_sema;//	struct semaphore free_obj_sema;
-	struct si_linked_list free_obj_list;
-
 	struct hantrovcmd_dev *dev_ctx;
 
 	u8 mmu_enable;
@@ -431,9 +401,6 @@ typedef struct {
 
 	//PCIE_EN defined
 	struct noncache_mem pcie_pool;	//pool for mem_vcmd, mem_status and mem_regs
-//	struct pci_dev *pcie_dev;
-
-	struct proc_obj *init_po;
 
 //	SemaphoreHandle_t isr_polling_sema;
 //	struct semaphore isr_polling_sema; //for reserve cmdbuf
@@ -446,6 +413,11 @@ typedef struct {
 #ifdef SUPPORT_DBGFS
 	void *dbgfs_ctx;
 #endif
+
+	SemaphoreHandle_t    job_waitq;//wait_queue_head_t job_waitq;
+	spinlock_t           job_lock;
+	struct bi_list       job_done_list;
+	u32                  in_wait;		/* user is waiting for a specified cmdbuf run done */
 } vcmd_mgr_t;
 
 

@@ -95,7 +95,7 @@ static void task1(void *param)
 {
 	(void)param;
 	while(1) {
-		hvc_puts("task1\n");
+		printf("task1\n");
 		cmd_recv();
 		vTaskDelay(1000);
 	}
@@ -105,38 +105,52 @@ static void task2(void *param)
 {
 	(void)param;
 	while(1) {
-		hvc_puts("task2\n");
+		printf("task2\n");
 		cmd_proc();
 		vTaskDelay(2000);
 	}
 }
 
-int main(void) {
-  uart_init();
-  vcx_vcmd_init(NULL);
-  printf("R52 is alive\r\n");
-  
-  //rd/wr register
-  {
-	  uint8_t val=0xff;
-	  val = readb(TIMER_BASE_ADDR);
-	  writeb(val, TIMER_BASE_ADDR);
-  }
+static void waitTask(void *param)
+{
+	uint32_t mgrID = *((uint32_t *)param);
+	while(1) {
+		printf("waitTask\n");
+        cmd_wait(mgrID);
+	}
+}
 
-  gic_setup(MAILBOX_IRQ);
+int main(void) {
+	uint32_t mgrID[2] = {0, 1};
+	uart_init();
+	vcodec_init(NULL);
+	vcx_vcmd_init(NULL);
+	printf("R52 is alive\r\n");
+
+	//rd/wr register
+	{
+		uint8_t val=0xff;
+		val = readb(TIMER_BASE_ADDR);
+		writeb(val, TIMER_BASE_ADDR);
+	}
+
+	gic_setup(MAILBOX_IRQ);
 
 #ifdef TEST_MAILBOX
-  mhu_init();
+	mhu_init();
 #endif
 
-  xTaskCreate(task1, "task1", 200, NULL, 2, NULL);
-  xTaskCreate(task2, "task2", 200, NULL, 1, NULL);
+	xTaskCreate(waitTask, "waitTask1", 200, &mgrID[0], 3, NULL);
+	xTaskCreate(waitTask, "waitTask2", 200, &mgrID[1], 3, NULL);
 
-  hvc_puts("Hello from FreeRTOS!\n");
-  vTaskStartScheduler();
+	xTaskCreate(task1, "task1", 200, NULL, 2, NULL);
+	xTaskCreate(task2, "task2", 200, NULL, 2, NULL);
 
-  while(1);
+	hvc_puts("Hello from FreeRTOS!\n");
+	vTaskStartScheduler();
 
-  vcx_vcmd_exit(NULL);
-  return 0;
+	while(1);
+
+	vcx_vcmd_exit(NULL);
+	return 0;
 }

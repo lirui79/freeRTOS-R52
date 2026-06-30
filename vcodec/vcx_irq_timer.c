@@ -56,7 +56,7 @@ void _vcmd_timeout_stop_timer(struct hantrovcmd_dev *dev) {
         return;
         // 无效信号：立即停止定时器，防止回调执行
     xTimerStopFromISR(dev->timeout_timer, &xHigherPriorityTaskWoken);
-//   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     dev->timeout_timer_active = 0;
 }
 
@@ -77,7 +77,7 @@ void _vcmd_timeout_start_timer(struct hantrovcmd_dev *dev) {
     // 3. 关键步骤：检查是否需要切换任务
     // 如果 Timer Service Task 的优先级高于当前被中断的任务，
     // xHigherPriorityTaskWoken 将被设置为 pdTRUE
-//    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 
     dev->timeout_timer_active = 1;
 }

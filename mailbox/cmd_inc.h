@@ -11,31 +11,19 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                                 include cmd header                           **
+**                             include cmd include header                       **
 *********************************************************************************/
 
-#ifndef _FREERTOS_COMMAND_H_
-#define _FREERTOS_COMMAND_H_
+#ifndef _COMMAND_INCLUDE_H_
+#define _COMMAND_INCLUDE_H_
 
-#include "cmdef.h"
+#include <mhu.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-void cmd_init(cmdMsg_t *cmdMsg);
-
-int32_t cmd_recv(void);
-
-int32_t cmd_send(cmdMsg_t *cmdMsg);
-
-int32_t cmd_proc(void);
-
-int32_t cmd_wait(uint32_t mgrid);
+#include <stdint.h>
+#include <stddef.h>
+#include <mhu_v3_x.h>
+#include <mhu_v3_x_private.h>
 
 
-#ifdef __cplusplus
-}
-#endif
 
-#endif /*_FREERTOS_COMMAND_H_*/
+#endif //_COMMAND_INCLUDE_H_

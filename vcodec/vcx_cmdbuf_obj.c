@@ -33,6 +33,12 @@
 #define APB_CLK_MODE	APB_CLK_ON
 
 
+static int dev_remove_job(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev, bi_list_node *node);
+
+static int _is_abnormal_run_done(struct cmdbuf_obj *obj);
+
+static void _abnormal_run_done_clear(struct cmdbuf_obj *obj);
+
 /*======================= cmdbuf object management ================*/
 /**
  * @brief initialize all of cmdbuf objs of vcmd driver handler.
@@ -106,112 +112,6 @@ static void reset_cmdbuf_node(vcmd_mgr_t *vcmd_mgr, u32 id)
 	node->next = NULL;
 	node->prev = NULL;
 	node->data = NULL;
-}
-
-/**
- * @brief put a node to tail of si-list.
- */
-static void _si_list_put(struct si_linked_list *list,
-							struct si_linked_node *node)
-{
-	if (list->head == NULL) {
-		list->head = list->tail = node;
-	} else {
-		list->tail->next = node;
-		list->tail = node;
-	}
-	node->next = NULL;
-}
-
-/**
- * @brief get & remove a node from head of si-list.
- * @return struct si_linked_node *: NULL: no node got; other: the node.
- */
-static struct si_linked_node *_si_list_get(struct si_linked_list *list)
-{
-	struct si_linked_node *node = list->head;
-
-	if (list->head) {
-		list->head = node->next;
-		if (list->head == NULL)
-			list->tail = NULL;
-	}
-
-	return node;
-}
-
-/**
- * @brief init a si-list.
- */
-static void vcmd_init_si_list(struct si_linked_list *list)
-{
-
-	spin_lock_init(&list->spinlock);
-	list->head = NULL;
-	list->tail = NULL;
-}
-
-/**
- * @brief init free obj (cmdbuf) list of vcmd driver handler.
- */
-void vcmd_init_free_obj_list(vcmd_mgr_t *vcmd_mgr)
-{
-	u32 i;
-	struct si_linked_list *list = &vcmd_mgr->free_obj_list;
-
-	vcmd_init_si_list(list);
-//	sema_init(&vcmd_mgr->free_obj_sema, SLOT_NUM_CMDBUF);
-
-	for (i = 0; i < SLOT_NUM_CMDBUF; i++) {
-		list->nodes[i].data = (void *)&vcmd_mgr->objs[i];
-		_si_list_put(list, &list->nodes[i]);
-	}
-}
-
-/**
- * @brief acquire a free cmdbuf.
- * @param u32 *id: to store acquired free cmdbuf id.
- * @return int: 0: succeed; otherwise: failed.
- */
-static int acquire_cmdbuf(vcmd_mgr_t *vcmd_mgr, u32 *id)
-{
-	struct si_linked_list *list = &vcmd_mgr->free_obj_list;
-	struct si_linked_node *node;
-	struct cmdbuf_obj *obj;
-/*
-	if (down_interruptible(&vcmd_mgr->free_obj_sema)) {
-		vcmd_klog(LOGLVL_ERROR, "%s: sema-down is interrupted!", __func__);
-		return -1;
-	}
-*/
-	spin_lock(&list->spinlock);
-	node = _si_list_get(list);
-	spin_unlock(&list->spinlock);
-	if (node == NULL) {
-		vcmd_klog(LOGLVL_ERROR, "%s: get NULL node!", __func__);
-		return -1;
-	}
-
-	obj = (struct cmdbuf_obj *)node->data;
-	*id = obj->cmdbuf_id;
-	return 0;
-}
-
-/**
- * @brief return (release) a cmdbuf specified by id.
- */
-void return_cmdbuf(vcmd_mgr_t *vcmd_mgr, u32 id)
-{
-	struct si_linked_list *list = &vcmd_mgr->free_obj_list;
-	struct si_linked_node *node = &list->nodes[id];
-	struct cmdbuf_obj *obj = (struct cmdbuf_obj *)node->data;
-
-	obj->po = NULL;
-
-	spin_lock(&list->spinlock);
-	_si_list_put(list, node);
-	spin_unlock(&list->spinlock);
-//	up(&vcmd_mgr->free_obj_sema);
 }
 
 /**
@@ -374,117 +274,15 @@ static void dev_link_cmdbuf(struct hantrovcmd_dev *dev,
 }
 
 /**
- * @brief create a process object
- */
-struct proc_obj *create_process_object(void)
-{
-	struct proc_obj *po;
-
-	po = vmalloc(sizeof(struct proc_obj));
-	if (!po) {
-		vcmd_klog(LOGLVL_ERROR, "%s: vmalloc failed!\n", __func__);
-		return NULL;
-	}
-
-	memset(po, 0, sizeof(struct proc_obj));
-	spin_lock_init(&po->spinlock);
-	po->resource_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->resource_waitq);
-	po->job_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->job_waitq);
-
-	spin_lock_init(&po->job_lock);
-	init_bi_list(&po->job_done_list);
-	return po;
-}
-
-/**
- * @brief free a process object
- */
-void free_process_object(struct proc_obj *po)
-{
-	if (!po) {
-		vcmd_klog(LOGLVL_ERROR, "%s: po is NULL!\n", __func__);
-		return;
-	}
-	if (po->resource_waitq)
-		vSemaphoreDelete(po->resource_waitq);
-	if (po->job_waitq)
-		vSemaphoreDelete(po->job_waitq);
-	po->resource_waitq = NULL;
-	po->job_waitq = NULL;
-	vfree(po);
-}
-
-struct proc_obj *init_process_object(struct proc_obj *po) {
-	memset(po, 0, sizeof(struct proc_obj));
-	spin_lock_init(&po->spinlock);
-	po->resource_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->resource_waitq);
-	po->job_waitq = xSemaphoreCreateBinary();//init_waitqueue_head(&po->job_waitq);
-
-	spin_lock_init(&po->job_lock);
-	init_bi_list(&po->job_done_list);
-	po->session   = NULL;
-	return po;
-}
-
-void   exit_process_object(struct proc_obj *po) {
-	if (!po) {
-		vcmd_klog(LOGLVL_ERROR, "%s: po is NULL!\n", __func__);
-		return;
-	}
-	if (po->resource_waitq)
-		vSemaphoreDelete(po->resource_waitq);
-	if (po->job_waitq)
-		vSemaphoreDelete(po->job_waitq);
-	po->resource_waitq = NULL;
-	po->job_waitq = NULL;
-	po->session   = NULL;
-}
-
-/**
- * @brief acquire workload from process object.
- * @return int: 0: succeed; Others: failed.
- */
-static int wait_process_resource_rdy(struct proc_obj *po, u32 maxworkload)
-{
-	return po->total_workload <= maxworkload;
-}
-
-static int acquire_process_resource(struct proc_obj *po, u32 workload, u32 maxworkload)
-{
-	spin_lock(&po->spinlock);
-	po->total_workload += workload;
-	spin_unlock(&po->spinlock);
-	while (1) {
-		if (wait_process_resource_rdy(po, maxworkload))
-		    return 0;
-        if (xSemaphoreTake(po->resource_waitq, pdMS_TO_TICKS(1000)) == pdTRUE) {
-			continue;
-		} else {
-			vcmd_klog(LOGLVL_ERROR, "%s: wait event is interrupted!", __func__);
-			return -1;
-		}
-	}
-	/*
-	if (wait_event_interruptible(po->resource_waitq,
-									wait_process_resource_rdy(po, maxworkload))) {
-		vcmd_klog(LOGLVL_ERROR, "%s: wait event is interrupted!", __func__);
-		return -1;
-	}*/
-	return 0;
-}
-
-/**
  * @brief return cmdbuf obj's workload to process object.
  */
-static void return_process_resource(struct proc_obj *po,
-									struct cmdbuf_obj *obj)
+static void return_process_resource(cmd_session_t *session, struct cmdbuf_obj *obj)
 {
-	if (po && obj->workload) {
-		spin_lock(&po->spinlock);
-		po->total_workload -= obj->workload;
-		spin_unlock(&po->spinlock);
-		obj->workload = 0;
-		xSemaphoreGive(po->resource_waitq);//wake_up_interruptible_all(&po->resource_waitq);
+	if (session && obj->workload) {
+		spin_lock(&session->spinlock);
+		session->total_workload -= obj->workload;
+		spin_unlock(&session->spinlock);
+		obj->workload = 0;//xSemaphoreGive(po->resource_waitq);//wake_up_interruptible_all(&po->resource_waitq);
 	}
 }
 
@@ -494,46 +292,44 @@ static void return_process_resource(struct proc_obj *po,
 void proc_add_done_job(vcmd_mgr_t *vcmd_mgr, struct cmdbuf_obj *obj)
 {
 	u16 id = obj->cmdbuf_id;
-	struct proc_obj *po;
 	struct bi_list *list;
 	unsigned long flags;
 	u32 is_empty, is_wait;
 	struct hantrovcmd_dev *dev = NULL;
 
-	if (!obj->po) {
+	if (!obj->session) {
 		vcmd_klog(LOGLVL_BRIEF, "%s: the po and cmdbufs of this po has been released!\n",
 						__func__);
 		return;
 	}
 
-	po = obj->po;
-	list = &po->job_done_list;
+	list = &vcmd_mgr->job_done_list;
 	dev = &vcmd_mgr->dev_ctx[obj->core_id];
 	if (obj->module_type == VCMD_TYPE_DECODER) {//	    wake_up_interruptible_all(&dev->buff_empty_waitq);
 		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 		xSemaphoreGiveFromISR(dev->buff_empty_waitq, &xHigherPriorityTaskWoken);
-		//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
-	spin_lock_irqsave(&po->job_lock, flags);
+	spin_lock_irqsave(&vcmd_mgr->job_lock, flags);
 
 	if (vcmd_mgr->po_jobs[id].data) {
 		//already in job-done list, do nothing
-		spin_unlock_irqrestore(&po->job_lock, flags);
+		spin_unlock_irqrestore(&vcmd_mgr->job_lock, flags);
 		return;
 	}
 
 	vcmd_mgr->po_jobs[id].data = (void *)&vcmd_mgr->objs[id];
 	is_empty = (list->head == NULL);
-	is_wait = po->in_wait;
-	po->in_wait = 0;
+	is_wait = vcmd_mgr->in_wait;
+	vcmd_mgr->in_wait = 0;
 	bi_list_insert_node_tail(list, &vcmd_mgr->po_jobs[id]);
 
-	spin_unlock_irqrestore(&po->job_lock, flags);
+	spin_unlock_irqrestore(&vcmd_mgr->job_lock, flags);
 
 	if (is_empty || is_wait) {//wake_up_interruptible_all(&po->job_waitq);
 		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-		xSemaphoreGiveFromISR(po->job_waitq, &xHigherPriorityTaskWoken);
-		//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+		xSemaphoreGiveFromISR(vcmd_mgr->job_waitq, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 	}
 }
 
@@ -543,32 +339,31 @@ void proc_add_done_job(vcmd_mgr_t *vcmd_mgr, struct cmdbuf_obj *obj)
  *									otherwise, get specified node from list.
  * @return int: 0: no done obj; 1: obj is done.
  */
-static int proc_get_done_job(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
-							struct cmdbuf_obj **pobj)
+static int proc_get_done_job(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct cmdbuf_obj **pobj)
 {
 
-	struct bi_list *list = &po->job_done_list;
+	struct bi_list *list = &vcmd_mgr->job_done_list;
 	bi_list_node *node;
 	unsigned long flags;
 	struct cmdbuf_obj *obj = NULL;
 	int is_done = 0, i = 0, run_done = 0;
 
-	spin_lock_irqsave(&po->job_lock, flags);
+	spin_lock_irqsave(&vcmd_mgr->job_lock, flags);
 	node = list->head;
 
 	if (node == NULL) {
 		// job done list is empty
-		po->in_wait = 1;
+		vcmd_mgr->in_wait = 1;
 		for (i = 0; i < SLOT_NUM_CMDBUF; i++) {
 			obj = &vcmd_mgr->objs[i];
-			if (obj->po == po)
+			if (obj->session == session)
 				break;
 		}
 		if (i == SLOT_NUM_CMDBUF) {
-			spin_unlock_irqrestore(&po->job_lock, flags);
+			spin_unlock_irqrestore(&vcmd_mgr->job_lock, flags);
 			return 1; /* used to drop_cmd_ids!=NULL when seek */
 		}
-		spin_unlock_irqrestore(&po->job_lock, flags);
+		spin_unlock_irqrestore(&vcmd_mgr->job_lock, flags);
 		return 0;
 	}
 
@@ -606,9 +401,69 @@ static int proc_get_done_job(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 		bi_list_remove_node(list, &vcmd_mgr->po_jobs[(*pobj)->cmdbuf_id]);
 		vcmd_mgr->po_jobs[(*pobj)->cmdbuf_id].data = NULL;
 	} else {
-		po->in_wait = 1;
+		vcmd_mgr->in_wait = 1;
 	}
-	spin_unlock_irqrestore(&po->job_lock, flags);
+	spin_unlock_irqrestore(&vcmd_mgr->job_lock, flags);
+
+	return is_done;
+}
+
+
+static int vcmd_get_done_job(vcmd_mgr_t *vcmd_mgr, struct cmdbuf_obj **pobj)
+{
+
+	struct bi_list *list = &vcmd_mgr->job_done_list;
+	bi_list_node *node;
+	unsigned long flags;
+	struct cmdbuf_obj *obj = NULL;
+	int is_done = 0, i = 0, run_done = 0;
+
+	spin_lock_irqsave(&vcmd_mgr->job_lock, flags);
+	node = list->head;
+
+	if (node == NULL) {
+		// job done list is empty
+		vcmd_mgr->in_wait = 1;
+		spin_unlock_irqrestore(&vcmd_mgr->job_lock, flags);
+		return 0;
+	}
+
+	if (*pobj == NULL) {
+		//any po's cmdbuf ready, return head of job_done_list
+		*pobj = (struct cmdbuf_obj *)node->data;
+		is_done = 1;
+	} else {
+		//specified cmdbuf ready?
+		obj = *pobj;
+		if (obj->module_type == VCMD_TYPE_ENCODER) {
+			run_done = obj->cmdbuf_run_done || _is_abnormal_run_done(obj);
+		}
+		if (obj->module_type == VCMD_TYPE_DECODER) {
+			run_done = obj->cmdbuf_run_done || obj->slice_run_done;
+		}
+
+		if (run_done) {
+			// check if the obj is in job done list
+			while (node && node->data != (void *)obj)
+				node = node->next;
+
+			if (node == NULL) {
+				vcmd_klog(LOGLVL_BRIEF, "%s: cmdbuf[%d] is done, but not in done-list!\n",
+						__func__, obj->cmdbuf_id);
+			} else {
+				vcmd_klog(LOGLVL_BRIEF, "%s: cmdbuf[%d] is done!\n", __func__, obj->cmdbuf_id);
+				is_done = 1;
+			}
+		}
+	}
+
+	if (is_done) {
+		bi_list_remove_node(list, &vcmd_mgr->po_jobs[(*pobj)->cmdbuf_id]);
+		vcmd_mgr->po_jobs[(*pobj)->cmdbuf_id].data = NULL;
+	} else {
+		vcmd_mgr->in_wait = 1;
+	}
+	spin_unlock_irqrestore(&vcmd_mgr->job_lock, flags);
 
 	return is_done;
 }
@@ -720,7 +575,7 @@ int dev_remove_job(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev,
 	}
 
 	if (dev_delink_job(dev, node))
-		return_cmdbuf(vcmd_mgr, obj->cmdbuf_id);
+		obj->session = NULL;
 
 	return 0;
 }
@@ -1070,8 +925,7 @@ void vcmd_start(struct hantrovcmd_dev *dev, int irq)
  * @param u32 *aborted_id: the id of aborted cmdbuf.
  * @param u32 vcmd_isr_polling: the mode to wait for device being aborted.
  */
-int vcmd_abort(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev,
-					u32 *aborted_id)
+int vcmd_abort(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev, u32 *aborted_id)
 {
 	unsigned long flags = 0;
 	u32 cnt = 100000, irq;
@@ -1093,16 +947,6 @@ int vcmd_abort(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev,
 				goto out;
 			}
 		}
-/*
-		if (wait_event_interruptible(*dev->abort_waitq,
-						(dev->state == VCMD_STATE_IDLE))) {
-			vcmd_klog(LOGLVL_ERROR, "%s: abort_waitq is signaled!!!\n", __func__);
-			vcmd_klog(LOGLVL_BRIEF, "%s: continue to wait vcmd aborted!!!\n", __func__);
-			goto isr_polling;
-		} else {
-			goto out;
-		}
-*/
 	}
 
 isr_polling:
@@ -1280,8 +1124,7 @@ static int select_vcmd(vcmd_mgr_t *vcmd_mgr, bi_list_node *new_node)
  * @param struct exchange_parameter *param: the param of cmdbuf to reserve.
  * @return long: 0: succeed; oters: failed.
  */
-long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
-							struct exchange_parameter *param)
+long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct exchange_parameter *param)
 {
 	struct cmdbuf_obj *obj;
 	u32 cmdbuf_id = 0;
@@ -1292,11 +1135,11 @@ long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 		return -1;
 	}
 
-	if (!po) {
+	if (!session) {
 		vcmd_klog(LOGLVL_ERROR, "%s: not find process obj!\n", __func__);
 		return -1;
 	}
-	//vcmd_klog(LOGLVL_FLOW, "reserve cmdbuf by filp %p\n", (void *)po->filp);
+
     if (param->module_type == VCMD_TYPE_ENCODER) {
 	    workload = (param->interrupt_ctrl) & 0x7fffffff; //bit31 for interrupt
 	    maxworkload = 32 * VCMD_WORKLOAD_UNIT;
@@ -1307,12 +1150,6 @@ long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 	    maxworkload = 64 * VCMD_WORKLOAD_UNIT;
 	}
 
-	if (acquire_process_resource(po, workload, maxworkload))
-		return -1;
-
-	if (acquire_cmdbuf(vcmd_mgr, &cmdbuf_id))
-		return -ERESTARTSYS;
-
 	reset_cmdbuf_obj(vcmd_mgr, cmdbuf_id);
 	reset_cmdbuf_node(vcmd_mgr, cmdbuf_id);
 
@@ -1321,15 +1158,11 @@ long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 	obj->priority = EXCH_G_BIT(param->input_mask, EXCH_PRIO_BIT);
 	obj->workload = workload;
 	obj->interrupt_ctrl = param->interrupt_ctrl;
-//	obj->filp = po->filp;
-	obj->po = po;
+	obj->session = session;
 	obj->core_mask = param->core_mask;
 
 	param->cmdbuf_size = SLOT_SIZE_CMDBUF;
 	param->cmdbuf_id = cmdbuf_id;
-	//vcmd_klog(LOGLVL_FLOW, "%s, filp[%p] reserved cmdbuf[%d]: obj %p, node %p\n",
-	//		__func__, (void *)obj->filp, cmdbuf_id, (void *)obj,
-	//		(void *)&vcmd_mgr->nodes[cmdbuf_id]);
 
 	vcmd_klog(LOGLVL_FLOW, "%s, reserved cmdbuf[%d]: obj %p, node %p\n",
 			__func__,  cmdbuf_id, (void *)obj,
@@ -1342,12 +1175,7 @@ long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 	return 0;
 }
 
-/**
- * @brief release a specified cmdbuf.
- * @return long: 0: succeed; oters: failed.
- */
-long release_cmdbuf(vcmd_mgr_t *vcmd_mgr,
-							struct proc_obj *po, u16 cmdbuf_id)
+int32_t vcmd_release_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id)
 {
 	struct cmdbuf_obj *obj = NULL;
 	bi_list_node *curr_node = NULL;
@@ -1362,23 +1190,17 @@ long release_cmdbuf(vcmd_mgr_t *vcmd_mgr,
 
 	curr_node = &vcmd_mgr->nodes[cmdbuf_id];
 	obj = (struct cmdbuf_obj *)curr_node->data;
-	if (obj->po != po) {
-		//should not happen
-		vcmd_klog(LOGLVL_ERROR, "%s: cmdbuf[%d] po not match: owned by %p, released by %p!!\n",
-						__func__, cmdbuf_id, obj->po, po);
-		return -1;
-	}
 
 	if (obj->cmdbuf_linked == 0) {
 		//not link_and_run yet
 		obj = (struct cmdbuf_obj *)curr_node->data;
-		return_process_resource(obj->po, obj);
-		return_cmdbuf(vcmd_mgr, cmdbuf_id);
+		return_process_resource(obj->session, obj);
+		obj->session = NULL;
 	} else {
 		obj->cmdbuf_need_remove = 1;
 		dev = &vcmd_mgr->dev_ctx[obj->core_id];
 
-		return_process_resource(obj->po, obj);
+		return_process_resource(obj->session, obj);
 		spin_lock_irqsave(dev->spinlock, flags);
 		dev_remove_job(vcmd_mgr, dev, curr_node);
 		spin_unlock_irqrestore(dev->spinlock, flags);
@@ -1392,8 +1214,7 @@ long release_cmdbuf(vcmd_mgr_t *vcmd_mgr,
  * @param struct exchange_parameter *param: the param of cmdbuf to link & run.
  * @return long: 0: succeed; oters: failed.
  */
-long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
-								struct exchange_parameter *param)
+long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct exchange_parameter *param)
 {
 	struct cmdbuf_obj *obj;
 	bi_list_node *curr_node;
@@ -1414,10 +1235,10 @@ long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 
 	curr_node = &vcmd_mgr->nodes[cmdbuf_id];
 	obj = (struct cmdbuf_obj *)curr_node->data;
-	if (obj->po != po) {
+	if (obj->session != session) {
 		//should not happen
-		vcmd_klog(LOGLVL_ERROR, "%s: cmdbuf[%d] po not match: owned by %p, released by %p!!\n",
-						__func__, cmdbuf_id, obj->po, po);
+		vcmd_klog(LOGLVL_ERROR, "%s: cmdbuf[%d] session not match: owned by %p, released by %p!!\n",
+						__func__, cmdbuf_id, obj->session, session);
 		return -1;
 	}
 
@@ -1448,12 +1269,8 @@ long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 			obj->jmp_ie = 1;
 	}
 
-//	if (down_interruptible(&vcmd_mgr->module_mgr[obj->module_type].sem))
-//		return -ERESTARTSYS;
-
 	ret = select_vcmd(vcmd_mgr, curr_node);
 	if (ret) {
-		//up(&vcmd_mgr->module_mgr[obj->module_type].sem);
 		return ret;
 	}
 
@@ -1499,13 +1316,10 @@ long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
 	}
 
 	spin_unlock_irqrestore(dev->spinlock, flags);
-
-//	up(&vcmd_mgr->module_mgr[obj->module_type].sem);
-
 	return 0;
 }
 
-int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdReqRunCmdBuf_Body_t *cmd_body) {
+int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, cmdReqRunCmdBuf_Body_t *cmd_body) {
 	struct cmdbuf_obj *obj;
 	bi_list_node *curr_node;
 
@@ -1515,6 +1329,7 @@ int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdReqRunCmdBuf_Body_t *c
 	uint16_t cmdbuf_id = cmd_body->cmdbuf_id;
 	uint16_t batchcount = ((cmd_body->interrupt_ctrl >> 32) & 0xff);
 
+    uint16_t       core_mask;
 	struct cmd_jmp_t *cmd_jmp;
 
 	if (cmdbuf_id >= SLOT_NUM_CMDBUF) {		//should not happen
@@ -1525,15 +1340,21 @@ int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdReqRunCmdBuf_Body_t *c
 	curr_node = &vcmd_mgr->nodes[cmdbuf_id];
 	obj = (struct cmdbuf_obj *)curr_node->data;
 /*
-	if (obj->po != po) {
+	if (cmd_body->procObj != po->) {
 		//should not happen
 		vcmd_klog(LOGLVL_ERROR, "%s: cmdbuf[%d] po not match: owned by %p, released by %p!!\n",
 						__func__, cmdbuf_id, obj->po, po);
 		return -1;
-	}//*/
+	}//
 
-	obj->cmdbuf_size = cmd_body->cmdbuf_size;
+	obj->po             = po;*/
+	obj->owner          = cmd_body->ownerID;
+	obj->session        = session;
+	obj->cmdbuf_size    = cmd_body->cmdbuf_size;
 	obj->interrupt_ctrl = cmd_body->interrupt_ctrl;
+	obj->module_type    = cmd_body->module_type;
+	obj->core_mask      = cmd_body->core_mask;
+	obj->priority       = EXCH_G_BIT(cmd_body->input_mask, EXCH_PRIO_BIT);
 
 #ifdef VCMD_DEBUG_INTERNAL
 	_dbg_log_cmdbuf(obj);
@@ -1615,46 +1436,25 @@ int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdReqRunCmdBuf_Body_t *c
  * @param u16 *done_id: point to the id of done cmdbuf.
  * @return long: 0: succeed; oters: failed.
  */
-long wait_cmdbuf_ready(vcmd_mgr_t *vcmd_mgr, struct proc_obj *po,
-								u16 cmdbuf_id, u16 *done_id)
+int32_t vcmd_wait_cmdbuf_ready(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id, u16 *done_id)
 {
 	struct cmdbuf_obj *obj = NULL;
 	long ret;
-
-	if (!po) {
-		vcmd_klog(LOGLVL_ERROR, "%s: not find process obj!\n", __func__);
-		return -ERESTARTSYS;
-	}
-
 	if (cmdbuf_id != ANY_CMDBUF_ID) {
-		vcmd_klog(LOGLVL_FLOW, "%s\n", __func__);
-		obj = &vcmd_mgr->objs[cmdbuf_id];
-		if (obj->po != po) {
-			//should not happen
-			vcmd_klog(LOGLVL_ERROR, "%s: ERROR cmdbuf filp not match!\n", __func__);
-			return -1;
-		}
-#ifdef IRQ_SIMULATION
-		_irq_simul_add_timer(obj);
-#endif
+        vcmd_klog(LOGLVL_FLOW, "%s\n", __func__);
+        obj = &vcmd_mgr->objs[cmdbuf_id];
 	}
 
 	while (1) {
-		if (proc_get_done_job(vcmd_mgr, po, &obj))
+		if (vcmd_get_done_job(vcmd_mgr, &obj))
 		   break;
-        if (xSemaphoreTake(po->job_waitq, pdMS_TO_TICKS(1000)) == pdTRUE) {
+        if (xSemaphoreTake(vcmd_mgr->job_waitq, pdMS_TO_TICKS(1000)) == pdTRUE) {
 			continue;
 		} else {
 		    vcmd_klog(LOGLVL_ERROR, "vcmd_wait_queue_0 interrupted\n");
 		    return -ERESTARTSYS;
 		}
 	}
-/*
-	if (wait_event_interruptible(po->job_waitq,
-						proc_get_done_job(vcmd_mgr, po, &obj))) {
-		vcmd_klog(LOGLVL_ERROR, "vcmd_wait_queue_0 interrupted\n");
-		return -ERESTARTSYS;
-	}*/
 
 	*done_id = obj->cmdbuf_id;
 	if (obj->cmdbuf_run_done == 1) {
@@ -1693,10 +1493,11 @@ void _abnormal_run_done_clear(struct cmdbuf_obj *obj)
 	if (obj->slice_run_done && obj->line_buffer_run_done) {
 		obj->slice_run_done = 0;
 		obj->line_buffer_run_done = 0;
-	} else if (obj->slice_run_done == 1)
+	} else if (obj->slice_run_done == 1) {
 		obj->slice_run_done = 0;
-	else if (obj->line_buffer_run_done == 1)
+	} else if (obj->line_buffer_run_done == 1) {
 		obj->line_buffer_run_done = 0;
+	}
 }
 
 /**
@@ -1768,8 +1569,7 @@ int abort_vcd(volatile u8 *reg_base)
 /**
  * @brief set vcmd abort by immediate mode for some special scenes
  */
-u32 vcmd_abort_mode_set(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev,
-							struct cmdbuf_obj *obj)
+u32 vcmd_abort_mode_set(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev, struct cmdbuf_obj *obj)
 {
 	unsigned long flags;
 
@@ -1814,4 +1614,174 @@ void vcmd_get_executing_cmdbuf(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev,
 									dev->reg_mirror,
 									HWIF_VCMD_CMDBUF_EXE_ID);
 	*node = &vcmd_mgr->nodes[curr_id];
+}
+
+
+/**
+ * @brief flush slice regs in vcmd driver
+ */
+int32_t vcmd_flush_slice_regs(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id)
+{
+	struct hantrovcmd_dev *dev = NULL;
+	struct cmdbuf_obj *obj = NULL;
+	unsigned long flags;
+	obj = &vcmd_mgr->objs[cmdbuf_id];
+	dev = &vcmd_mgr->dev_ctx[obj->core_id];
+	spin_lock_irqsave(&dev->abn_irq_lock, flags);
+	obj->slice_run_done = 0;
+	spin_unlock_irqrestore(&dev->abn_irq_lock, flags);
+
+#ifdef SUPPORT_WATCHDOG
+	spin_lock_irqsave(dev->spinlock, flags);
+	_vcmd_watchdog_feed(dev, 0);
+	spin_unlock_irqrestore(dev->spinlock, flags);
+#endif
+
+	vcmd_write_reg((const void *)dev->hwregs,  VCMD_REGISTER_EXT_INT_GATE_OFFSET, dev->intr_gate_mask);
+
+	return 0;
+}
+
+/**
+ * @brief polling cmdbuf in vcmd driver
+ */
+int32_t vcmd_polling_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 core_id)
+{
+	int32_t   irq = core_id;
+    if (core_id != 0xFFFF) {
+        hantrovcmd_isr(irq, vcmd_mgr);
+	} else {
+		for (irq = 0; irq < vcmd_mgr->subsys_num; irq++) {
+	        hantrovcmd_isr(irq, vcmd_mgr);
+		}
+	}
+	return 0;
+}
+
+/**
+ * @brief abort the decoder of the cmdbuf_id which is waiting more slice.
+ */
+int32_t vcmd_abort_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id)
+{
+	struct hantrovcmd_dev *dev = NULL;
+	struct cmdbuf_obj *obj = NULL;
+	bi_list_node *node = NULL;
+	volatile u8 *hwregs;
+	u16  reg_id_exe;
+	unsigned long flags;
+
+	node = &vcmd_mgr->nodes[cmdbuf_id];
+	obj = (struct cmdbuf_obj *)node->data;
+
+	dev = &vcmd_mgr->dev_ctx[obj->core_id];
+	hwregs = dev->subsys_info->hwregs[SUB_MOD_MAIN];
+	reg_id_exe = (u16)(*(dev->reg_mem_va + REG_ID2_CMDBUF_EXE_ID));
+	if (cmdbuf_id == reg_id_exe) {
+		spin_lock_irqsave(dev->spinlock, flags);
+		abort_vcd(hwregs);
+		spin_unlock_irqrestore(dev->spinlock, flags);
+	} else {
+		//should not happen
+		vcmd_klog(LOGLVL_ERROR, "%s: ERROR cmdbuf id not match with current dev!\n", __func__);
+		return CMD_ERR_INVALID_CMDBUFID;
+	}
+
+	return 0;
+}
+
+int32_t vcmd_drop_owner(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, uint64_t ownerID, cmdRspDropOwner_Body_t *cmd_body) {
+	struct hantrovcmd_dev *dev;
+	bi_list *list;
+	bi_list_node *node;
+	struct cmdbuf_obj *obj;
+
+	u32 i, handled, to_drop;
+	u32 has_work_node, vcmd_aborted, aborted_cmdbuf_id;
+	unsigned long flags;
+	int ;
+	long dropped_cmdbuf_num = 0;
+
+	handled = 0;
+	//remove nodes in dev->work_list
+	for (i = 0; i < vcmd_mgr->subsys_num; i++) {
+		dev = &vcmd_mgr->dev_ctx[i];
+		if (dev == NULL || dev->hwregs == NULL)
+			continue;
+
+		list = &dev->work_list;
+
+		has_work_node = 0;
+		vcmd_aborted = 0;
+
+		spin_lock_irqsave(dev->spinlock, flags);
+		node = list->head;
+		while (node) {
+			obj = (struct cmdbuf_obj *)node->data;
+			if (obj->session == session) {
+				if ((ownerID != 0x00) && (ownerID == obj->owner)) {
+					has_work_node = 1;
+					break;
+				}
+			}
+			node = node->next;
+		}
+
+		if (has_work_node) {
+			if (dev->state == VCMD_STATE_WORKING) {
+				vcmd_klog(LOGLVL_FLOW, "Abort dev[%d].\n", dev->core_id);
+				vcmd_get_executing_cmdbuf(vcmd_mgr, dev, &node);
+				obj = (struct cmdbuf_obj *)node->data;
+				spin_unlock_irqrestore(dev->spinlock, flags);
+
+				vcmd_abort_mode_set(vcmd_mgr, dev, obj);
+				vcmd_abort(vcmd_mgr, dev, &aborted_cmdbuf_id);
+
+				spin_lock_irqsave(dev->spinlock, flags);
+				if (dev->abort_mode == 1)
+					dev->abort_mode = 0;
+				if (dev->state != VCMD_STATE_IDLE) {
+					vcmd_klog(LOGLVL_ERROR, "dev [%d] is not aborted as expected.", dev->core_id);
+					spin_unlock_irqrestore(dev->spinlock, flags);
+					continue;
+				}
+				vcmd_aborted = 1;
+
+				if (!obj->cmdbuf_run_done && obj->slice_run_done)
+					abort_vcd(dev->subsys_info->hwregs[SUB_MOD_MAIN]);
+			}
+
+			node = list->head;
+			while (node) {
+				obj = (struct cmdbuf_obj *)node->data;
+				if (obj->session == session || obj->cmdbuf_need_remove) {
+					to_drop = 0;
+					if ((ownerID != 0x00) && (ownerID == obj->owner) && !obj->cmdbuf_run_done) {
+						to_drop = 1;
+						handled++;
+					}
+					if (ownerID == 0x00 || to_drop == 1) {
+						vcmd_klog(LOGLVL_FLOW, "cmdbuf %d of process %p is released or dropped\n", obj->cmdbuf_id, obj->session);
+						dev_remove_job(vcmd_mgr, dev, node);
+					}
+				}
+
+				node = node->next;
+			}
+
+			vcmd_klog(LOGLVL_FLOW, "Restart dev[%d].\n", dev->core_id);
+			if (vcmd_aborted == 1)
+				vcmd_start(dev, 0);
+		}
+		spin_unlock_irqrestore(dev->spinlock, flags);
+	}
+
+	if ((ownerID != 0x00) && handled) {
+		dropped_cmdbuf_num = handled;
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR(vcmd_mgr->job_waitq, &xHigherPriorityTaskWoken);
+		portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+	}
+
+	cmd_body->cmdbuf_num = dropped_cmdbuf_num;
+	return 0;
 }

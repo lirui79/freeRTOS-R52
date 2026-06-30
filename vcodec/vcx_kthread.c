@@ -254,7 +254,7 @@ void _vcmd_kthread_wakeup_irq(vcmd_mgr_t *vcmd_mgr, unsigned int value)
     );
 
     // 3. 【必须】检查是否需要上下文切换
-   // portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR();//portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
 //	wake_up_interruptible_all(&vcmd_mgr->kthread_waitq);
 }
 
