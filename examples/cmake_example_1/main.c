@@ -6,7 +6,7 @@
 #include "gic.h"
 #include "io.h"
 #include "system.h"
-#include "cmd.h"
+#include "cmdr52_proc.h"
 
 #include "vcodec.h"
 
@@ -96,7 +96,7 @@ static void task1(void *param)
 	(void)param;
 	while(1) {
 		printf("task1\n");
-		cmd_recv();
+		cmdr52_recv();
 		vTaskDelay(1000);
 	}
 }
@@ -106,7 +106,7 @@ static void task2(void *param)
 	(void)param;
 	while(1) {
 		printf("task2\n");
-		cmd_proc();
+		cmdr52_proc();
 		vTaskDelay(2000);
 	}
 }
@@ -116,7 +116,7 @@ static void waitTask(void *param)
 	uint32_t mgrID = *((uint32_t *)param);
 	while(1) {
 		printf("waitTask\n");
-        cmd_wait(mgrID);
+        cmdr52_wait(mgrID);
 	}
 }
 

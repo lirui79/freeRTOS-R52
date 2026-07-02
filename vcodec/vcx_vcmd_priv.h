@@ -64,7 +64,7 @@
 #endif
 
 #include "vcodec.h"
-#include "cmd_session.h"
+#include "cmdr52_session.h"
 #include "vcx_vcmd_defs.h"
 #include "bidirect_list.h"
 #include "vcmdswhwregisters.h"
@@ -244,7 +244,7 @@ struct cmdbuf_obj {
 	/*file pointer occupying this obj.*/
 //	struct file *filp;
 	/* pointer of process object occupying this obj*/
-	cmd_session_t   *session;//struct proc_obj *po;
+	cmdr52_session_t   *session;//struct proc_obj *po;
 	/* pointer of the instance of process */
 	u64   owner;
 	//current status CMDBUF mmu mapping address.

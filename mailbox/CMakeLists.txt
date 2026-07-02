@@ -15,9 +15,9 @@ add_library(freertos_mailbox STATIC)
 ## add_subdirectory(portable)
 
 target_sources(freertos_mailbox PRIVATE
-    cmd.c
-    cmd_mgr.c
-    cmd_session.c
+    cmdr52_proc.c
+    cmdr52_mgr.c
+    cmdr52_session.c
 )
 
 target_link_libraries(freertos_mailbox
