@@ -276,7 +276,7 @@ static void dev_link_cmdbuf(struct hantrovcmd_dev *dev,
 /**
  * @brief return cmdbuf obj's workload to process object.
  */
-static void return_process_resource(cmd_session_t *session, struct cmdbuf_obj *obj)
+static void return_process_resource(cmdr52_session_t *session, struct cmdbuf_obj *obj)
 {
 	if (session && obj->workload) {
 		spin_lock(&session->spinlock);
@@ -339,7 +339,7 @@ void proc_add_done_job(vcmd_mgr_t *vcmd_mgr, struct cmdbuf_obj *obj)
  *									otherwise, get specified node from list.
  * @return int: 0: no done obj; 1: obj is done.
  */
-static int proc_get_done_job(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct cmdbuf_obj **pobj)
+static int proc_get_done_job(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, struct cmdbuf_obj **pobj)
 {
 
 	struct bi_list *list = &vcmd_mgr->job_done_list;
@@ -1124,7 +1124,7 @@ static int select_vcmd(vcmd_mgr_t *vcmd_mgr, bi_list_node *new_node)
  * @param struct exchange_parameter *param: the param of cmdbuf to reserve.
  * @return long: 0: succeed; oters: failed.
  */
-long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct exchange_parameter *param)
+long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, struct exchange_parameter *param)
 {
 	struct cmdbuf_obj *obj;
 	u32 cmdbuf_id = 0;
@@ -1214,7 +1214,7 @@ int32_t vcmd_release_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id)
  * @param struct exchange_parameter *param: the param of cmdbuf to link & run.
  * @return long: 0: succeed; oters: failed.
  */
-long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct exchange_parameter *param)
+long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, struct exchange_parameter *param)
 {
 	struct cmdbuf_obj *obj;
 	bi_list_node *curr_node;
@@ -1319,7 +1319,7 @@ long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct ex
 	return 0;
 }
 
-int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, cmdReqRunCmdBuf_Body_t *cmd_body) {
+int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, cmdReqRunCmdBuf_Body_t *cmd_body) {
 	struct cmdbuf_obj *obj;
 	bi_list_node *curr_node;
 
@@ -1689,7 +1689,7 @@ int32_t vcmd_abort_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id)
 	return 0;
 }
 
-int32_t vcmd_drop_owner(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, uint64_t ownerID, cmdRspDropOwner_Body_t *cmd_body) {
+int32_t vcmd_drop_owner(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, uint64_t ownerID, cmdRspDropOwner_Body_t *cmd_body) {
 	struct hantrovcmd_dev *dev;
 	bi_list *list;
 	bi_list_node *node;

@@ -14,7 +14,7 @@
 **                         *.c vcd vcmd source code                             **
 *********************************************************************************/
 
-#include "cmd_mgr.h"
+#include "cmdr52_mgr.h"
 #include "vcd_vcmd_cfg.h"
 #include "vcx_vcmd.h"
 #include "vcx_vcmd_priv.h"
@@ -533,9 +533,9 @@ static void read_main_module_all_registers(vcmd_mgr_t *vcmd_mgr)
 	struct hantrovcmd_dev *dev;
 	struct vcmd_module_mgr *module;
 	u32 *main_regs_va;
-	cmd_session_t *cmd_session = NULL;
+	cmdr52_session_t *cmdr52_session = NULL;
 
-	cmd_session = cmd_get_session(0x0);
+	cmdr52_session = cmdr52_mgr_get_session(0x0);
 
 	for (i = 0; i < vcmd_mgr->subsys_num; i++) {
 		dev = &vcmd_mgr->dev_ctx[i];
@@ -549,9 +549,9 @@ static void read_main_module_all_registers(vcmd_mgr_t *vcmd_mgr)
 		EXCH_S_BIT(param[i].input_mask, EXCH_END_CMD_BIT);
 		module = &vcmd_mgr->module_mgr[param[i].module_type];
 
-		ret = reserve_cmdbuf(vcmd_mgr, cmd_session, &param[i]);
+		ret = reserve_cmdbuf(vcmd_mgr, cmdr52_session, &param[i]);
 		create_read_all_registers_cmdbuf(vcmd_mgr, &param[i]);
-		link_and_run_cmdbuf(vcmd_mgr, cmd_session, &param[i]);
+		link_and_run_cmdbuf(vcmd_mgr, cmdr52_session, &param[i]);
 	}
 
 	/* make sure vcmd can complete job, and clear irq

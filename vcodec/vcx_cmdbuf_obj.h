@@ -41,13 +41,13 @@ void vcmd_start(struct hantrovcmd_dev *dev, int irq);
 
 int vcmd_abort(vcmd_mgr_t *vcmd_mgr, struct hantrovcmd_dev *dev, u32 *aborted_id);
 
-long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session,	struct exchange_parameter *param);
+long reserve_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session,	struct exchange_parameter *param);
 
 int32_t vcmd_release_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id);
 
-long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, struct exchange_parameter *param);
+long link_and_run_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, struct exchange_parameter *param);
 
-int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, cmdReqRunCmdBuf_Body_t *cmd_body);
+int32_t vcmd_link_and_rum_cmdbuf(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, cmdReqRunCmdBuf_Body_t *cmd_body);
 
 int32_t vcmd_wait_cmdbuf_ready(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id, u16 *done_id);
 
@@ -71,7 +71,7 @@ int32_t vcmd_polling_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 core_id);
 
 int32_t vcmd_abort_cmdbuf(vcmd_mgr_t *vcmd_mgr, u16 cmdbuf_id);
 
-int32_t vcmd_drop_owner(vcmd_mgr_t *vcmd_mgr, cmd_session_t *session, uint64_t ownerID, cmdRspDropOwner_Body_t *cmd_body);
+int32_t vcmd_drop_owner(vcmd_mgr_t *vcmd_mgr, cmdr52_session_t *session, uint64_t ownerID, cmdRspDropOwner_Body_t *cmd_body);
 
 
 #ifdef __cplusplus

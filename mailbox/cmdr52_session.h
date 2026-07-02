@@ -11,31 +11,55 @@
 **                  on all copies and should not be removed.                    **
 **                                                                              **
 **********************************************************************************
-**                                 include cmd header                           **
+**                      include command r52 session header                      **
 *********************************************************************************/
 
-#ifndef _FREERTOS_COMMAND_H_
-#define _FREERTOS_COMMAND_H_
+#ifndef _COMMANDR52_SESSION_H_
+#define _COMMANDR52_SESSION_H_
+
 
 #include "cmdef.h"
+#include "spinlock.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void cmd_init(cmdMsg_t *cmdMsg);
+#define CMD_SESSION_MAX  32
 
-int32_t cmd_recv(void);
+typedef enum {
+    CMD_SESSION_STATUS_IDLE = 0,
+    CMD_SESSION_STATUS_RUN,
+    CMD_SESSION_STATUS_EXIT,
+    CMD_SESSION_STATUS_STOP
+} cmdr52_session_status_t;
 
-int32_t cmd_send(cmdMsg_t *cmdMsg);
 
-int32_t cmd_proc(void);
 
-int32_t cmd_wait(uint32_t mgrid);
+//session
+typedef struct {
+    uint64_t               procObj;
+    uint32_t               sessionID;// r52id + session_idx
+    uint32_t               seqRNum;// sequence number, from 0 to 0xFFFFFFFF
+    uint32_t               seqSNum;// sequence number, from 0 to 0xFFFFFFFF
+    uint32_t               status;
+    uint32_t               total_workload;
+    spinlock_t             spinlock;
+} cmdr52_session_t;
+
+int32_t        cmdr52_session_init(cmdr52_session_t *session, uint32_t sessionID);
+
+int32_t        cmdr52_session_check(cmdr52_session_t *session, cmdMsg_t *cmdMsg);
+
+int32_t        cmdr52_session_system(cmdr52_session_t *session, cmdMsg_t *cmdMsg);
+
+int32_t        cmdr52_session_vcodec(cmdr52_session_t *session, cmdMsg_t *cmdMsg);
+
+int32_t        cmdr52_session_send(cmdr52_session_t *session, cmdMsg_t *cmdMsg);
 
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /*_FREERTOS_COMMAND_H_*/
+#endif /*_COMMANDR52_SESSION_H_*/
